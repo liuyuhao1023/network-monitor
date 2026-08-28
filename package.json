@@ -1,0 +1,30 @@
+{
+  "name": "network-monitor-dashboard",
+  "version": "1.0.0",
+  "description": "An all-in-one, modern Linux Edge Server & Network Cluster Management Dashboard with UPS Power, RAID Storage, Traffic Analytics, Web Hosting and Webhook Notifications.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "network-monitor",
+    "linux-dashboard",
+    "edge-server",
+    "ups-monitor",
+    "raid-management",
+    "cluster-monitoring",
+    "traffic-analytics",
+    "webhook-notification",
+    "openclash",
+    "nginx-web"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "stateRules": {
+    "overload": {
+      "enabled": true,
+      "severity": "danger",
+      "name": "UPS 过载",
+      "supported": true,
+      "description": "UPS 负载超过 100% 额定功率或处于过载报警状态"
+    },
+    "bypass": {
+      "enabled": true,
+      "severity": "warning",
+      "name": "UPS 进入旁路模式",
+      "supported": true,
+      "description": "UPS 切换至旁路直通供电"
+    },
+    "replaceBattery": {
+      "enabled": true,
+      "severity": "warning",
+      "name": "电池需要更换",
+      "supported": false,
+      "description": "电池老化或自检未通过需更换"
+    },
+    "selfTestFail": {
+      "enabled": true,
+      "severity": "warning",
+      "name": "UPS 自检失败",
+      "supported": true,
+      "description": "电池自检或逆变测试返回失败"
+    }
+  },
+  "valueRules": {
+    "vinLow": {
+      "enabled": true,
+      "triggerVal": 190,
+      "restoreVal": 200,
+      "unit": "V",
+      "severity": "warning",
+      "name": "输入电压过低",
+      "supported": true
+    },
+    "vinHigh": {
+      "enabled": true,
+      "triggerVal": 250,
+      "restoreVal": 245,
+      "unit": "V",
+      "severity": "warning",
+      "name": "输入电压过高",
+      "supported": true
+    },
+    "voutLow": {
+      "enabled": true,
+      "triggerVal": 190,
+      "restoreVal": 200,
+      "unit": "V",
+      "severity": "warning",
+      "name": "输出电压过低",
+      "supported": true
+    },
+    "voutHigh": {
+      "enabled": true,
+      "triggerVal": 250,
+      "restoreVal": 245,
+      "unit": "V",
+      "severity": "warning",
+      "name": "输出电压过高",
+      "supported": true
+    },
+    "freqLow": {
+      "enabled": true,
+      "triggerVal": 47,
+      "restoreVal": 48,
+      "unit": "Hz",
+      "severity": "warning",
+      "name": "输入频率过低",
+      "supported": true
+    },
+    "freqHigh": {
+      "enabled": true,
+      "triggerVal": 53,
+      "restoreVal": 52,
+      "unit": "Hz",
+      "severity": "warning",
+      "name": "输入频率过高",
+      "supported": true
+    },
+    "tempHigh": {
+      "enabled": true,
+      "triggerVal": 50,
+      "restoreVal": 45,
+      "unit": "℃",
+      "severity": "warning",
+      "name": "UPS 温度过高",
+      "supported": false
+    },
+    "loadWarning": {
+      "enabled": true,
+      "triggerVal": 80,
+      "restoreVal": 75,
+      "unit": "%",
+      "severity": "warning",
+      "name": "UPS 负载较高",
+      "supported": true
+    },
+    "loadCritical": {
+      "enabled": true,
+      "triggerVal": 95,
+      "restoreVal": 90,
+      "unit": "%",
+      "severity": "danger",
+      "name": "UPS 严重过载",
+      "supported": true
+    }
+  }
+}

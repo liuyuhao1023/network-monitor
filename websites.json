@@ -1,0 +1,308 @@
+[
+  {
+    "id": "site-node-mt373y2i",
+    "name": "test-node.local_3000",
+    "type": "node",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "test-node.local",
+        "port": 3000
+      }
+    ],
+    "rootDir": "/www/wwwroot/test-node",
+    "runSubDir": "/",
+    "remark": "Node.js Test Site",
+    "backupCount": 0,
+    "phpVersion": "php-7.4",
+    "rewriteTemplate": "default",
+    "nodePort": 3000,
+    "pythonPort": 8000,
+    "javaPort": 8080,
+    "goPort": 8080,
+    "framework": "",
+    "entryFile": "",
+    "proxyTarget": "",
+    "addDefaultPage": true,
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false,
+      "brand": "未部署证书",
+      "domains": "",
+      "expireDate": "",
+      "expireDays": 0,
+      "key": "",
+      "pem": ""
+    },
+    "waf": {
+      "enabled": true,
+      "ccProtection": true,
+      "sqlInjection": true,
+      "xssProtection": true,
+      "geoBlock": false,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [
+        "127.0.0.1 - - [8/21/2026:12:00:00 +0800] \"GET / HTTP/1.1\" 200 1284 \"-\" \"Initial-Deploy-Probe\""
+      ],
+      "error": []
+    },
+    "nginxConf": "# Nginx virtual host for test-node.local_3000\nserver {\n    listen 3000;\n    server_name test-node.local;\n    root /www/wwwroot/test-node;\n    index index.html index.htm index.php default.html;\n\n    location / {\n        try_files $uri $uri/ /index.html;\n    }\n\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection 'upgrade';\n        proxy_set_header Host $host;\n        proxy_cache_bypass $http_upgrade;\n    }\n\n    access_log /var/log/nginx/site-node-mt373y2i_access.log;\n    error_log /var/log/nginx/site-node-mt373y2i_error.log;\n}",
+    "createdAt": "2026-08-21T17:00:37.820Z"
+  },
+  {
+    "id": "site-php-8181",
+    "name": "192.168.100.100_8181",
+    "type": "php",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "192.168.100.100",
+        "port": 8181
+      },
+      {
+        "domain": "192.168.1.9",
+        "port": 8181
+      }
+    ],
+    "rootDir": "/xp/www/sdcms-test",
+    "runSubDir": "/",
+    "remark": "sdcms-test",
+    "backupCount": 0,
+    "phpVersion": "php-7.4",
+    "addDefaultPage": true,
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false,
+      "brand": "JoySSL DV TLS G2 R33 CA",
+      "domains": "*.phpstudy.net, phpstudy.net",
+      "expireDate": "2026-03-14",
+      "expireDays": 310,
+      "key": "",
+      "pem": ""
+    },
+    "waf": {
+      "enabled": true,
+      "ccProtection": true,
+      "sqlInjection": true,
+      "xssProtection": true,
+      "geoBlock": false,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [
+        "192.168.1.100 - - [8/21/2026:10:15:22 +0800] \"GET /index.php HTTP/1.1\" 200 4520 \"-\" \"Mozilla/5.0 Chrome/120.0\"",
+        "192.168.1.100 - - [8/21/2026:10:15:23 +0800] \"GET /static/app.css HTTP/1.1\" 304 0 \"-\" \"Mozilla/5.0 Chrome/120.0\"",
+        "192.168.1.100 - - [8/21/2026:10:15:24 +0800] \"GET /api/v1/status HTTP/1.1\" 200 128 \"-\" \"Mozilla/5.0 Chrome/120.0\""
+      ],
+      "error": []
+    },
+    "nginxConf": "# Nginx vhost config for 192.168.100.100_8181\nserver {\n    listen 8181;\n    server_name 192.168.100.100 192.168.1.9;\n    root /xp/www/sdcms-test;\n    index index.php index.html index.htm default.html;\n\n    location / {\n        try_files $uri $uri/ /index.php?$query_string;\n    }\n\n    location ~ .php$ {\n        fastcgi_pass unix:/run/php/php7.4-fpm.sock;\n        fastcgi_index index.php;\n        include fastcgi_params;\n        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n    }\n}",
+    "createdAt": "2026-08-21T17:00:19.242Z"
+  },
+  {
+    "id": "site-php-8120",
+    "name": "192.168.100.100_8120",
+    "type": "php",
+    "status": "stopped",
+    "domains": [
+      {
+        "domain": "192.168.100.100",
+        "port": 8120
+      }
+    ],
+    "rootDir": "/xp/www/sdcms-test-2",
+    "runSubDir": "/",
+    "remark": "sdcms-test",
+    "backupCount": 0,
+    "phpVersion": "php-8.0",
+    "addDefaultPage": true,
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false
+    },
+    "waf": {
+      "enabled": false,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [],
+      "error": []
+    },
+    "nginxConf": "",
+    "createdAt": "2026-08-21T17:00:19.243Z"
+  },
+  {
+    "id": "site-php-aacom",
+    "name": "aa.com",
+    "type": "php",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "aa.com",
+        "port": 80
+      },
+      {
+        "domain": "www.aa.com",
+        "port": 80
+      }
+    ],
+    "rootDir": "/xp/www/apache-pma",
+    "runSubDir": "/",
+    "remark": "apache-pma",
+    "backupCount": 0,
+    "phpVersion": "php-7.4",
+    "addDefaultPage": true,
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false
+    },
+    "waf": {
+      "enabled": true,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [],
+      "error": []
+    },
+    "nginxConf": "",
+    "createdAt": "2026-08-21T17:00:19.243Z"
+  },
+  {
+    "id": "site-php-9191",
+    "name": "192.168.100.100_9191",
+    "type": "php",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "192.168.100.100",
+        "port": 9191
+      }
+    ],
+    "rootDir": "/xp/www/damicms-test",
+    "runSubDir": "/",
+    "remark": "damicms-test",
+    "backupCount": 0,
+    "phpVersion": "php-7.4",
+    "addDefaultPage": true,
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false
+    },
+    "waf": {
+      "enabled": true,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [],
+      "error": []
+    },
+    "nginxConf": "",
+    "createdAt": "2026-08-21T17:00:19.243Z"
+  },
+  {
+    "id": "site-html-portal",
+    "name": "html-portal.local",
+    "type": "html",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "192.168.1.9",
+        "port": 8080
+      }
+    ],
+    "rootDir": "/www/wwwroot/html-portal",
+    "runSubDir": "/",
+    "remark": "前端静态官网与文档中心",
+    "backupCount": 0,
+    "addDefaultPage": true,
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false
+    },
+    "waf": {
+      "enabled": true,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [],
+      "error": []
+    },
+    "nginxConf": "",
+    "createdAt": "2026-08-21T17:00:19.243Z"
+  },
+  {
+    "id": "site-node-api",
+    "name": "node-microservice.local",
+    "type": "node",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "192.168.1.9",
+        "port": 3000
+      }
+    ],
+    "rootDir": "/www/wwwroot/node-api",
+    "runSubDir": "/",
+    "remark": "Node.js Express 接口网关",
+    "backupCount": 0,
+    "nodeVersion": "Node 20 LTS",
+    "entryFile": "server.js",
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false
+    },
+    "waf": {
+      "enabled": true,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [],
+      "error": []
+    },
+    "nginxConf": "",
+    "createdAt": "2026-08-21T17:00:19.243Z"
+  },
+  {
+    "id": "site-py-ai",
+    "name": "python-flask-service.local",
+    "type": "python",
+    "status": "running",
+    "domains": [
+      {
+        "domain": "192.168.1.9",
+        "port": 8000
+      }
+    ],
+    "rootDir": "/www/wwwroot/py-service",
+    "runSubDir": "/",
+    "remark": "Python Flask / FastAPI 接口服务",
+    "backupCount": 0,
+    "pythonVersion": "Python 3.12",
+    "framework": "Flask",
+    "entryFile": "app.py",
+    "ssl": {
+      "enabled": false,
+      "forceHttps": false
+    },
+    "waf": {
+      "enabled": true,
+      "logs": []
+    },
+    "logs": {
+      "enabled": true,
+      "access": [],
+      "error": []
+    },
+    "nginxConf": "",
+    "createdAt": "2026-08-21T17:00:19.243Z"
+  }
+]

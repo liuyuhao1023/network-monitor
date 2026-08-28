@@ -1,0 +1,22 @@
+{
+  "mode": "auto",
+  "tcpHost": "192.168.1.8",
+  "tcpPort": 8887,
+  "port": "/dev/ttyUSB0",
+  "baudRate": 9600,
+  "upsName": "cyberpower",
+  "host": "127.0.0.1",
+  "portNum": 3493,
+  "snmpCommunity": "public",
+  "lowBatteryPct": 20,
+  "lowRuntimeSec": 300,
+  "autoShutdown": true,
+  "notifyEnable": true,
+  "workMode": "eco",
+  "autoEcoRecovery": true,
+  "notifyOnOutage": true,
+  "notifyOnRestore": true,
+  "notifyOnLowBattery": true,
+  "notifyDelaySec": 2,
+  "notifyWebhookUrl": ""
+}

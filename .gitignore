@@ -1,0 +1,30 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime dynamic states & history
+*.log
+ups_history.json
+ups_energy_daily.json
+ups_events.json
+ups_pq_events.json
+push_history.json
+web_users.json
+cluster_history.json
+
+# Environment and secrets
+.env
+.env.local
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,2569 @@
+{
+  "subnets": [
+    {
+      "id": "sub-wan",
+      "name": "公网出口 (WAN)",
+      "cidr": "WAN",
+      "color": "#3b82f6"
+    },
+    {
+      "id": "sub-lan1",
+      "name": "核心主网段",
+      "cidr": "192.168.1.0/24",
+      "color": "#10b981"
+    },
+    {
+      "id": "sub-lan2",
+      "name": "蒲公英路由器",
+      "cidr": "192.168.2.0/24",
+      "color": "#f59e0b"
+    },
+    {
+      "id": "sub-msw2vni3",
+      "name": "监控路由器",
+      "cidr": "192.168.0.0/24",
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "sub-msw2waem",
+      "name": "360路由器",
+      "cidr": "192.168.0.0/24",
+      "color": "#f75ff2"
+    },
+    {
+      "id": "sub-msw2wv9e",
+      "name": "ac-ap",
+      "cidr": "192.168.10.0/24",
+      "color": "#f75ff2"
+    }
+  ],
+  "customNodes": [
+    {
+      "id": "node-internet",
+      "name": "Internet (公网)",
+      "type": "wan",
+      "ip": "0.0.0.0",
+      "subnet": "sub-wan",
+      "parentId": null,
+      "icon": "fa-globe",
+      "note": "运营商宽带出口",
+      "isAuto": false
+    },
+    {
+      "id": "node-modem",
+      "name": "光猫 (路由模式)",
+      "type": "modem",
+      "ip": "192.168.1.1",
+      "subnet": "sub-lan1",
+      "parentId": "node-internet",
+      "icon": "fa-ethernet",
+      "note": "光猫路由一体机 (192.168.1.1)",
+      "isAuto": false
+    },
+    {
+      "id": "srv-master",
+      "name": "主服务器",
+      "type": "server",
+      "ip": "192.168.1.9",
+      "subnet": "sub-lan1",
+      "parentId": "node-modem",
+      "note": "边缘路由宿主机 (192.168.1.9)",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-msw2hz1i-qj4i",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "isAuto": false
+    },
+    {
+      "id": "srv-msw2hyc8-rza3",
+      "name": "边缘服务器",
+      "type": "server",
+      "ip": "192.168.1.2",
+      "subnet": "sub-lan1",
+      "parentId": "node-modem",
+      "note": "远程集群",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-msw2hz1i-qj4i",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "isAuto": false
+    },
+    {
+      "name": "蒲公英X5Pro",
+      "type": "router",
+      "ip": "1192.168.2.1",
+      "parentId": "node-modem",
+      "note": "二级路由器 (0网段)",
+      "status": "online",
+      "id": "node-msw2nld3",
+      "isAuto": false,
+      "subnet": "sub-lan2",
+      "links": [
+        {
+          "source": "srv-msw2hz1i-qj4i",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hz1i-qj4i",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null
+    },
+    {
+      "id": "srv-msw2hz1i-qj4i",
+      "name": "iStoreOS",
+      "type": "siderouter",
+      "ip": "192.168.2.169",
+      "subnet": "sub-lan2",
+      "parentId": "node-msw2nld3",
+      "note": "远程集群",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw319m1",
+      "name": "PC",
+      "type": "host",
+      "ip": "192.168.2.177",
+      "subnet": "sub-lan2",
+      "parentId": "node-msw2nld3",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw32b9f",
+      "name": "PC",
+      "type": "host",
+      "ip": "192.168.1.86",
+      "subnet": "sub-lan1",
+      "parentId": "node-modem",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw34hlj",
+      "name": "监控路由器",
+      "type": "router",
+      "ip": "192.168.0.1",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-modem",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw3glya",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw3jb3f",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw35bhz",
+      "name": "360防火墙",
+      "type": "router",
+      "ip": "192.168.0.1",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-modem",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw3glya",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw3jb3f",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw3amek",
+      "name": "串口服务器1",
+      "type": "iot",
+      "ip": "192.168.1.7",
+      "subnet": "sub-lan1",
+      "parentId": "node-modem",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw3c0of",
+      "name": "UPS",
+      "type": "iot",
+      "ip": "192.168.1.8",
+      "subnet": "sub-lan1",
+      "parentId": "srv-master",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw3dhcx",
+      "name": "串口服务器2",
+      "type": "iot",
+      "ip": "192.168.1.145",
+      "subnet": "sub-lan1",
+      "parentId": "srv-master",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw3fc90",
+      "name": "串口服务器3",
+      "type": "iot",
+      "ip": "192.168.1.146",
+      "subnet": "sub-lan1",
+      "parentId": "srv-master",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw3glya",
+      "name": "UPS2",
+      "type": "iot",
+      "ip": "192.168.2.110",
+      "subnet": "sub-lan2",
+      "parentId": "srv-msw2hxia-83qd",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw3glya",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw3glya",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-msw3jb3f",
+      "name": "监控录像机",
+      "type": "camera",
+      "ip": "192.168.0.100",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw3glya",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-msw3jb3f",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-101",
+      "name": "网络摄像头 01",
+      "type": "camera",
+      "ip": "192.168.0.101",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.101",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-102",
+      "name": "网络摄像头 02",
+      "type": "camera",
+      "ip": "192.168.0.102",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.102",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-103",
+      "name": "网络摄像头 03",
+      "type": "camera",
+      "ip": "192.168.0.103",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.103",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-104",
+      "name": "网络摄像头 04",
+      "type": "camera",
+      "ip": "192.168.0.104",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.104",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-105",
+      "name": "网络摄像头 05",
+      "type": "camera",
+      "ip": "192.168.0.105",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.105",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-106",
+      "name": "网络摄像头 06",
+      "type": "camera",
+      "ip": "192.168.0.106",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.106",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-107",
+      "name": "网络摄像头 07",
+      "type": "camera",
+      "ip": "192.168.0.107",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.107",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-108",
+      "name": "网络摄像头 08",
+      "type": "camera",
+      "ip": "192.168.0.108",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.108",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-109",
+      "name": "网络摄像头 09",
+      "type": "camera",
+      "ip": "192.168.0.109",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.109",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-cam-110",
+      "name": "网络摄像头 10",
+      "type": "camera",
+      "ip": "192.168.0.110",
+      "subnet": "sub-msw2vni3",
+      "parentId": "node-msw34hlj",
+      "note": "监控摄像头 192.168.0.110",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ewlink-1",
+      "name": "易微联智能开关 1",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "智能控制开关 1",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ewlink-2",
+      "name": "易微联智能开关 2",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "智能控制开关 2",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ewlink-3",
+      "name": "易微联智能开关 3",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "智能控制开关 3",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ewlink-4",
+      "name": "易微联智能开关 4",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "智能控制开关 4",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ewlink-5",
+      "name": "易微联智能开关 5",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "智能控制开关 5",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ewlink-6",
+      "name": "易微联智能开关 6",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "智能控制开关 6",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-elevator-ctrl",
+      "name": "电梯控制",
+      "type": "iot",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "电梯智能化控制系统",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-printer-office",
+      "name": "网络打印机",
+      "type": "printer",
+      "ip": "",
+      "subnet": "sub-msw2waem",
+      "parentId": "node-msw35bhz",
+      "note": "局域网办公打印机 (自动IP)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ac-master",
+      "name": "AC控制器 / POE网关",
+      "type": "router",
+      "ip": "192.168.10.1",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-modem",
+      "note": "光猫LAN口直连 (AC核心控制器)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-02",
+      "name": "无线 AP 01",
+      "type": "switch",
+      "ip": "192.168.10.2",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.2)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-03",
+      "name": "无线 AP 02",
+      "type": "switch",
+      "ip": "192.168.10.3",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.3)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-04",
+      "name": "无线 AP 03",
+      "type": "switch",
+      "ip": "192.168.10.4",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.4)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-05",
+      "name": "无线 AP 04",
+      "type": "switch",
+      "ip": "192.168.10.5",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.5)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-06",
+      "name": "无线 AP 05",
+      "type": "switch",
+      "ip": "192.168.10.6",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.6)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-07",
+      "name": "无线 AP 06",
+      "type": "switch",
+      "ip": "192.168.10.7",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.7)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-08",
+      "name": "无线 AP 07",
+      "type": "switch",
+      "ip": "192.168.10.8",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.8)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-09",
+      "name": "无线 AP 08",
+      "type": "switch",
+      "ip": "192.168.10.9",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.9)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-ap-10",
+      "name": "无线 AP 09",
+      "type": "switch",
+      "ip": "192.168.10.10",
+      "subnet": "sub-msw2wv9e",
+      "parentId": "node-ac-master",
+      "note": "全屋无线覆盖 AP (192.168.10.10)",
+      "status": "online",
+      "isAuto": false
+    },
+    {
+      "id": "node-mswplvcz",
+      "name": "电视机顶盒",
+      "type": "pc",
+      "ip": "192.168.1.252",
+      "subnet": "sub-wan",
+      "parentId": null,
+      "note": "",
+      "status": "online",
+      "links": [
+        {
+          "source": "srv-master",
+          "target": "node-docker",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-internet",
+          "target": "node-modem",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "srv-msw2hyc8-rza3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hxia-83qd",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-docker",
+          "target": "srv-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw2nld3",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "srv-msw2hz1i-qj4i",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw2nld3",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw32b9f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw32b9f",
+          "target": "node-msw319m1",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3amek",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3c0of",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3fc90",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-master",
+          "target": "node-msw3dhcx",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "srv-msw2hxia-83qd",
+          "target": "node-msw3glya",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw34hlj",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-msw35bhz",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-msw3jb3f",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-101",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-102",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-103",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-104",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-105",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-106",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-107",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-108",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-109",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw34hlj",
+          "target": "node-cam-110",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-ewlink-1",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-ewlink-2",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-ewlink-3",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-ewlink-4",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-ewlink-5",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-ewlink-6",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-elevator-ctrl",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-msw35bhz",
+          "target": "node-printer-office",
+          "type": "solid",
+          "speed": "100Mbps"
+        },
+        {
+          "source": "node-modem",
+          "target": "node-ac-master",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-02",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-03",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-04",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-05",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-06",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-07",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-08",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-09",
+          "type": "solid",
+          "speed": "1Gbps"
+        },
+        {
+          "source": "node-ac-master",
+          "target": "node-ap-10",
+          "type": "solid",
+          "speed": "1Gbps"
+        }
+      ],
+      "customSubnet": null,
+      "isAuto": false
+    }
+  ],
+  "links": [
+    {
+      "source": "srv-master",
+      "target": "node-docker",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-internet",
+      "target": "node-modem",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "srv-master",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "srv-msw2hyc8-rza3",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "node-msw2nld3",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-msw2nld3",
+      "target": "srv-msw2hxia-83qd",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-docker",
+      "target": "srv-master",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "srv-msw2hxia-83qd",
+      "target": "node-msw2nld3",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-msw2nld3",
+      "target": "srv-msw2hz1i-qj4i",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-msw2nld3",
+      "target": "node-msw319m1",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "node-msw32b9f",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-msw32b9f",
+      "target": "node-msw319m1",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "srv-master",
+      "target": "node-msw3amek",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "srv-master",
+      "target": "node-msw3c0of",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "srv-master",
+      "target": "node-msw3fc90",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "srv-master",
+      "target": "node-msw3dhcx",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "srv-msw2hxia-83qd",
+      "target": "node-msw3glya",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "node-msw34hlj",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "node-msw35bhz",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-msw3jb3f",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-101",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-102",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-103",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-104",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-105",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-106",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-107",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-108",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-109",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw34hlj",
+      "target": "node-cam-110",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-ewlink-1",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-ewlink-2",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-ewlink-3",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-ewlink-4",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-ewlink-5",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-ewlink-6",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-elevator-ctrl",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-msw35bhz",
+      "target": "node-printer-office",
+      "type": "solid",
+      "speed": "100Mbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "node-ac-master",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-02",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-03",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-04",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-05",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-06",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-07",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-08",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-09",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-ac-master",
+      "target": "node-ap-10",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-modem",
+      "target": "node-mswplvcz",
+      "type": "solid",
+      "speed": "1Gbps"
+    },
+    {
+      "source": "node-mswplvcz",
+      "target": "srv-msw2hxia-83qd",
+      "type": "solid",
+      "speed": "1Gbps"
+    }
+  ],
+  "deletedNodeIds": [],
+  "positions": {
+    "node-internet": {
+      "x": 2,
+      "y": -337
+    },
+    "node-modem": {
+      "x": -113,
+      "y": -108
+    },
+    "srv-master": {
+      "x": -726,
+      "y": 145
+    },
+    "srv-msw2hyc8-rza3": {
+      "x": -691,
+      "y": -107
+    },
+    "node-msw32b9f": {
+      "x": 256,
+      "y": 302
+    },
+    "node-msw3amek": {
+      "x": -648,
+      "y": 681
+    },
+    "node-msw2nld3": {
+      "x": -104,
+      "y": 308
+    },
+    "node-msw34hlj": {
+      "x": 691,
+      "y": 493
+    },
+    "node-msw35bhz": {
+      "x": 1283,
+      "y": 493
+    },
+    "node-ac-master": {
+      "x": 1764,
+      "y": 458
+    },
+    "node-docker": {
+      "x": -989,
+      "y": 319
+    },
+    "node-msw3c0of": {
+      "x": -1067,
+      "y": 515
+    },
+    "node-msw3dhcx": {
+      "x": -895,
+      "y": 888
+    },
+    "node-msw3fc90": {
+      "x": -1008,
+      "y": 691
+    },
+    "srv-msw2hz1i-qj4i": {
+      "x": 13,
+      "y": 750
+    },
+    "srv-msw2hxia-83qd": {
+      "x": -198,
+      "y": 571
+    },
+    "node-msw319m1": {
+      "x": 170,
+      "y": 548
+    },
+    "node-msw3glya": {
+      "x": -312,
+      "y": 877
+    },
+    "node-msw3jb3f": {
+      "x": 471,
+      "y": 772
+    },
+    "node-cam-101": {
+      "x": 456,
+      "y": 1285
+    },
+    "node-cam-102": {
+      "x": 780,
+      "y": 935
+    },
+    "node-cam-103": {
+      "x": 765,
+      "y": 1280
+    },
+    "node-cam-104": {
+      "x": 448,
+      "y": 1605
+    },
+    "node-cam-105": {
+      "x": 470,
+      "y": 937
+    },
+    "node-cam-106": {
+      "x": 777,
+      "y": 773
+    },
+    "node-cam-107": {
+      "x": 777,
+      "y": 1103
+    },
+    "node-cam-108": {
+      "x": 449,
+      "y": 1454
+    },
+    "node-cam-109": {
+      "x": 770,
+      "y": 1455
+    },
+    "node-cam-110": {
+      "x": 464,
+      "y": 1108
+    },
+    "node-ewlink-1": {
+      "x": 1115,
+      "y": 740
+    },
+    "node-ewlink-2": {
+      "x": 1117,
+      "y": 1050
+    },
+    "node-ewlink-3": {
+      "x": 1115,
+      "y": 1212
+    },
+    "node-ewlink-4": {
+      "x": 1113,
+      "y": 1370
+    },
+    "node-ewlink-5": {
+      "x": 1117,
+      "y": 1524
+    },
+    "node-ewlink-6": {
+      "x": 1117,
+      "y": 892
+    },
+    "node-elevator-ctrl": {
+      "x": 1429,
+      "y": 979
+    },
+    "node-printer-office": {
+      "x": 1425,
+      "y": 1144
+    },
+    "node-ap-02": {
+      "x": 1694,
+      "y": 668
+    },
+    "node-ap-03": {
+      "x": 1937,
+      "y": 675
+    },
+    "node-ap-04": {
+      "x": 1692,
+      "y": 831
+    },
+    "node-ap-05": {
+      "x": 1944,
+      "y": 829
+    },
+    "node-ap-06": {
+      "x": 1689,
+      "y": 994
+    },
+    "node-ap-07": {
+      "x": 1953,
+      "y": 991
+    },
+    "node-ap-08": {
+      "x": 1686,
+      "y": 1148
+    },
+    "node-ap-09": {
+      "x": 1953,
+      "y": 1148
+    },
+    "node-ap-10": {
+      "x": 1684,
+      "y": 1298
+    },
+    "node-mswplvcz": {
+      "x": -403,
+      "y": 320
+    },
+    "srv-mt35wq5f-6jr8": {
+      "x": 18,
+      "y": 954
+    },
+    "srv-mta2p391-5f83": {
+      "x": -458,
+      "y": 1087
+    }
+  }
+}
