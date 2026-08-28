@@ -2,17 +2,19 @@
 node_modules/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 
-# Runtime dynamic states & history
+# Dynamic runtime state & history databases
 *.log
+cluster_servers.json
+cluster_history.json
+network_topology.json
 ups_history.json
 ups_energy_daily.json
 ups_events.json
 ups_pq_events.json
 push_history.json
 web_users.json
-cluster_history.json
+websites.json
 
 # Environment and secrets
 .env
@@ -23,8 +25,3 @@ cluster_history.json
 # OS files
 .DS_Store
 Thumbs.db
-Desktop.ini
-
-# IDE
-.vscode/
-.idea/
