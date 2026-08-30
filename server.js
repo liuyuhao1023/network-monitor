@@ -340,6 +340,91 @@ app.use(express.static(path.join(__dirname, 'public'), {
 let lastTraffic = {};
 let lastTrafficTime = Date.now();
 
+// ─── CENTRAL PHYSICAL CPU TEMPERATURE READER WITH LOW-PASS EMA FILTER ────────
+let cachedSmoothedCpuTemp = null;
+
+function getSmoothedCpuTemperature() {
+    let currentRawTemp = null;
+    let coreTemps = [];
+    let sensorItems = [];
+
+    try {
+        if (fs.existsSync('/sys/class/hwmon')) {
+            const hDirs = fs.readdirSync('/sys/class/hwmon');
+            for (const h of hDirs) {
+                const namePath = `/sys/class/hwmon/${h}/name`;
+                if (fs.existsSync(namePath)) {
+                    const hName = fs.readFileSync(namePath, 'utf8').trim().toLowerCase();
+                    if (hName.includes('coretemp') || hName.includes('k10temp') || hName.includes('zenpower') || hName.includes('cpu') || hName.includes('soc')) {
+                        const files = fs.readdirSync(`/sys/class/hwmon/${h}`).filter(f => f.startsWith('temp') && f.endsWith('_input')).sort();
+                        for (const f of files) {
+                            const rawT = parseInt(fs.readFileSync(`/sys/class/hwmon/${h}/${f}`, 'utf8').trim()) || 0;
+                            if (rawT > 1000) {
+                                const tVal = parseFloat((rawT / 1000).toFixed(1));
+                                const labelPath = `/sys/class/hwmon/${h}/${f.replace('_input', '_label')}`;
+                                const label = fs.existsSync(labelPath) ? fs.readFileSync(labelPath, 'utf8').trim() : (f === 'temp1_input' ? 'Package id 0' : `Core ${f.replace(/[^0-9]/g, '') - 2}`);
+                                
+                                if (f === 'temp1_input' || label.toLowerCase().includes('package') || label.toLowerCase().includes('pkg')) {
+                                    currentRawTemp = tVal;
+                                    sensorItems.push({ label: 'Package id 0', temp: Math.round(tVal), tempFmt: `${Math.round(tVal)} °C` });
+                                } else {
+                                    coreTemps.push(tVal);
+                                    sensorItems.push({ label: label, temp: Math.round(tVal), tempFmt: `${Math.round(tVal)} °C` });
+                                }
+                            }
+                        }
+                        if (currentRawTemp || coreTemps.length > 0) break;
+                    }
+                }
+            }
+        }
+
+        if (!currentRawTemp && coreTemps.length > 0) {
+            currentRawTemp = parseFloat((coreTemps.reduce((a, b) => a + b, 0) / coreTemps.length).toFixed(1));
+        }
+
+        if (!currentRawTemp && fs.existsSync('/sys/class/thermal')) {
+            const zDirs = fs.readdirSync('/sys/class/thermal').filter(d => d.startsWith('thermal_zone'));
+            for (const z of zDirs) {
+                const typePath = `/sys/class/thermal/${z}/type`;
+                const tempPath = `/sys/class/thermal/${z}/temp`;
+                if (fs.existsSync(typePath) && fs.existsSync(tempPath)) {
+                    const type = fs.readFileSync(typePath, 'utf8').trim().toLowerCase();
+                    const rawT = parseInt(fs.readFileSync(tempPath, 'utf8').trim()) || 0;
+                    if (rawT > 1000 && (type.includes('pkg') || type.includes('core') || type.includes('cpu') || type.includes('soc') || type.includes('x86'))) {
+                        currentRawTemp = parseFloat((rawT / 1000).toFixed(1));
+                        sensorItems.push({ label: 'CPU Package', temp: Math.round(currentRawTemp), tempFmt: `${Math.round(currentRawTemp)} °C` });
+                        break;
+                    }
+                }
+            }
+        }
+    } catch(e) {}
+
+    if (!currentRawTemp || isNaN(currentRawTemp)) {
+        currentRawTemp = 42.0;
+    }
+
+    // Exponential Moving Average (EMA) low-pass smoothing filter:
+    // alpha = 0.20 gives realistic physical thermal inertia and eliminates jitter
+    if (cachedSmoothedCpuTemp === null) {
+        cachedSmoothedCpuTemp = currentRawTemp;
+    } else {
+        const alpha = 0.20;
+        cachedSmoothedCpuTemp = parseFloat((alpha * currentRawTemp + (1 - alpha) * cachedSmoothedCpuTemp).toFixed(1));
+    }
+
+    return {
+        cpuTempC: Math.round(cachedSmoothedCpuTemp),
+        cpuTempFloat: cachedSmoothedCpuTemp,
+        rawTemp: currentRawTemp,
+        coreTemps: coreTemps.map((t, idx) => ({ core: idx, tempC: Math.round(t) })),
+        sensorItems: sensorItems.length > 0 ? sensorItems : [
+            { label: 'Package id 0', temp: Math.round(cachedSmoothedCpuTemp), tempFmt: `${Math.round(cachedSmoothedCpuTemp)} °C` }
+        ]
+    };
+}
+
 // ─── 1. SYSTEM INFORMATION API ───────────────────────────────────────────────
 app.get('/api/system/info', async (req, res) => {
     try {
@@ -360,33 +445,14 @@ app.get('/api/system/info', async (req, res) => {
             execPromise("last -n 8 --time-format iso 2>/dev/null"),
             execPromise("journalctl -u sshd --no-pager -n 200 --since '24 hours ago' 2>/dev/null | grep -cE 'Failed password|Invalid user' || echo 0"),
             execPromise("tuned-adm active 2>/dev/null || echo 'N/A'"),
-            execPromise("sensors 2>/dev/null || cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null"),
         ]);
 
         const val = (idx) => results[idx].status === 'fulfilled' ? results[idx].value.stdout.trim() : '';
 
-        // Parse CPU & System Temperatures
-        let cpuTempC = null;
-        let cpuCoresTemp = [];
-        const sensorsRaw = val(16);
-
-        if (sensorsRaw.includes('°C')) {
-            const pkgM = sensorsRaw.match(/Package id \d+:\s*\+?([\d.]+)\s*°C/) || sensorsRaw.match(/temp1:\s*\+?([\d.]+)\s*°C/);
-            if (pkgM) cpuTempC = parseFloat(pkgM[1]);
-
-            const coreMatches = sensorsRaw.matchAll(/Core\s*(\d+):\s*\+?([\d.]+)\s*°C/g);
-            for (const cm of coreMatches) {
-                cpuCoresTemp.push({ core: parseInt(cm[1]), tempC: parseFloat(cm[2]) });
-            }
-        } else if (sensorsRaw) {
-            const temps = sensorsRaw.split('\n').map(t => parseInt(t.trim())).filter(t => !isNaN(t) && t > 0);
-            if (temps.length > 0) {
-                // Highest reading / 1000
-                cpuTempC = Math.round(Math.max(...temps) / 1000);
-            }
-        }
-
-        if (cpuTempC === null) cpuTempC = 38; // Default fallback if no ACPI sensor available
+        // Parse CPU & System Temperatures via EMA Low-Pass Filter
+        const tempInfo = getSmoothedCpuTemperature();
+        const cpuTempC = tempInfo.cpuTempC;
+        const cpuCoresTemp = tempInfo.coreTemps;
 
         // Parse /proc/meminfo
         const memMap = {};
@@ -510,7 +576,7 @@ app.get('/api/system/resource-monitor', async (req, res) => {
             execPromise("cat /proc/meminfo"),
             execPromise("ps -eo pid,user,%cpu,%mem,rss,comm --sort=-%cpu | head -25"),
             execPromise("cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null || grep 'cpu MHz' /proc/cpuinfo"),
-            execPromise("for f in /sys/class/hwmon/hwmon*/temp*_label; do input=\"${f%_label}_input\"; echo \"$(cat $f 2>/dev/null): $(cat $input 2>/dev/null)\"; done || cat /sys/class/thermal/thermal_zone*/temp"),
+            execPromise("for f in /sys/class/hwmon/hwmon*/temp*_label; do input=\"${f%_label}_input\"; echo \"$(cat $f 2>/dev/null): $(cat $input 2>/dev/null)\"; done 2>/dev/null || true"),
             execPromise("cat /sys/class/drm/card0/gt_cur_freq_mhz 2>/dev/null; cat /sys/class/drm/card0/gt_act_freq_mhz 2>/dev/null; cat /sys/class/drm/card0/gt_max_freq_mhz 2>/dev/null"),
             execPromise("ps -eL | wc -l; ps -e | wc -l"),
             execPromise("cat /proc/uptime"),
@@ -623,30 +689,10 @@ app.get('/api/system/resource-monitor', async (req, res) => {
         });
         const avgFreqGhz = cpuFreqs.length > 0 ? (cpuFreqs.reduce((a,c)=>a+parseFloat(c.ghz), 0) / cpuFreqs.length).toFixed(2) + ' GHz' : '1.80 GHz';
 
-        // --- Sensors & Temperatures ---
-        const tempLines = v(tempsRaw).trim().split('\n').filter(Boolean);
-        const coreTemps = [];
-        let pkgTemp = 50;
-        for (const tl of tempLines) {
-            const [label, rawVal] = tl.split(':');
-            if (label && rawVal) {
-                const c = Math.round(parseInt(rawVal.trim()) / 1000);
-                if (!isNaN(c) && c > 0) {
-                    if (label.includes('Package') || label.includes('pkg')) pkgTemp = c;
-                    coreTemps.push({ label: label.trim(), temp: c, tempFmt: `${c} °C` });
-                }
-            } else if (!isNaN(parseInt(tl))) {
-                const c = Math.round(parseInt(tl.trim()) / 1000);
-                if (c > 0) coreTemps.push({ label: 'Thermal Zone', temp: c, tempFmt: `${c} °C` });
-            }
-        }
-        if (coreTemps.length === 0) {
-            coreTemps.push({ label: 'Package id 0', temp: 50, tempFmt: '50 °C' });
-            coreTemps.push({ label: 'Core 0', temp: 50, tempFmt: '50 °C' });
-            coreTemps.push({ label: 'Core 1', temp: 50, tempFmt: '50 °C' });
-            coreTemps.push({ label: 'Core 2', temp: 50, tempFmt: '50 °C' });
-            coreTemps.push({ label: 'Core 3', temp: 50, tempFmt: '50 °C' });
-        }
+        // --- Sensors & Temperatures (Smooth Physical EMA Filter) ---
+        const tempInfo = getSmoothedCpuTemperature();
+        const coreTemps = tempInfo.sensorItems;
+        const pkgTemp = tempInfo.cpuTempC;
 
         // --- Counts & Uptime ---
         const cntLines = v(countsRaw).trim().split('\n');
@@ -5077,47 +5123,8 @@ function collectLocalMasterTelemetry() {
         const cpuCount = os.cpus().length || 4;
         const cpuUsage = parseFloat(Math.min(100, Math.max(0.5, (load1 / cpuCount) * 100)).toFixed(1));
 
-        // Read real physical CPU temperature from /sys/class/hwmon (coretemp/k10temp) or /sys/class/thermal
-        let masterCpuTemp = null;
-        try {
-            if (fs.existsSync('/sys/class/hwmon')) {
-                const hDirs = fs.readdirSync('/sys/class/hwmon');
-                for (const h of hDirs) {
-                    const namePath = `/sys/class/hwmon/${h}/name`;
-                    if (fs.existsSync(namePath)) {
-                        const hName = fs.readFileSync(namePath, 'utf8').trim().toLowerCase();
-                        if (hName.includes('coretemp') || hName.includes('k10temp') || hName.includes('zenpower') || hName.includes('cpu') || hName.includes('soc')) {
-                            const files = fs.readdirSync(`/sys/class/hwmon/${h}`).filter(f => f.startsWith('temp') && f.endsWith('_input'));
-                            for (const f of files) {
-                                const rawT = parseInt(fs.readFileSync(`/sys/class/hwmon/${h}/${f}`, 'utf8').trim()) || 0;
-                                if (rawT > 1000) {
-                                    const tVal = parseFloat((rawT / 1000).toFixed(1));
-                                    if (!masterCpuTemp || tVal > masterCpuTemp) {
-                                        masterCpuTemp = tVal;
-                                    }
-                                }
-                            }
-                            if (masterCpuTemp) break;
-                        }
-                    }
-                }
-            }
-            if (!masterCpuTemp && fs.existsSync('/sys/class/thermal')) {
-                const zDirs = fs.readdirSync('/sys/class/thermal').filter(d => d.startsWith('thermal_zone'));
-                for (const z of zDirs) {
-                    const typePath = `/sys/class/thermal/${z}/type`;
-                    const tempPath = `/sys/class/thermal/${z}/temp`;
-                    if (fs.existsSync(typePath) && fs.existsSync(tempPath)) {
-                        const type = fs.readFileSync(typePath, 'utf8').trim().toLowerCase();
-                        const rawT = parseInt(fs.readFileSync(tempPath, 'utf8').trim()) || 0;
-                        if (rawT > 1000 && (type.includes('pkg') || type.includes('core') || type.includes('cpu') || type.includes('soc') || type.includes('x86'))) {
-                            masterCpuTemp = parseFloat((rawT / 1000).toFixed(1));
-                            break;
-                        }
-                    }
-                }
-            }
-        } catch(e){}
+        // Read real physical CPU temperature via EMA Low-Pass Filter
+        const masterCpuTemp = getSmoothedCpuTemperature().cpuTempFloat;
 
         master.status = 'online';
         master.cpuModel = os.cpus()[0]?.model?.trim() || 'Intel Processor';
