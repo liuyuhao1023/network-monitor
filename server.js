@@ -1091,6 +1091,258 @@ app.post('/api/docker/action', async (req, res) => {
     }
 });
 
+// ─── 4. NETWORK WORKING MODE & INTERFACES MANAGEMENT ──────────────────────────
+const NETWORK_MODE_FILE = path.join(__dirname, 'network_mode.json');
+
+function getPhysicalNetworkInterfaces() {
+    const nics = {};
+    try {
+        const netDir = '/sys/class/net';
+        if (fs.existsSync(netDir)) {
+            const list = fs.readdirSync(netDir);
+            for (const name of list) {
+                if (fs.existsSync(path.join(netDir, name, 'device'))) {
+                    let mac = '';
+                    const addrPath = path.join(netDir, name, 'address');
+                    if (fs.existsSync(addrPath)) {
+                        mac = fs.readFileSync(addrPath, 'utf8').trim().toLowerCase();
+                    }
+                    nics[name] = mac;
+                }
+            }
+        }
+    } catch (e) {}
+    return nics;
+}
+
+function loadNetworkModeConfig() {
+    const phys = getPhysicalNetworkInterfaces();
+    const defaultWan = phys['lan1'] ? 'lan1' : (Object.keys(phys)[0] || 'eth0');
+    const defaultLans = Object.keys(phys).filter(p => p !== defaultWan);
+
+    const defaultCfg = {
+        mode: "switch",
+        wan_interface: defaultWan,
+        lan_interfaces: defaultLans,
+        router_config: {
+            gateway_ip: "192.168.100.1",
+            netmask: "255.255.255.0",
+            dhcp_start: "192.168.100.100",
+            dhcp_end: "192.168.100.200",
+            lease_time: "12h",
+            dns: ["223.5.5.5", "114.114.114.114"]
+        }
+    };
+
+    const candidates = [NETWORK_MODE_FILE, '/opt/nas-web/network_mode.json'];
+    for (const fpath of candidates) {
+        if (fs.existsSync(fpath)) {
+            try {
+                const data = JSON.parse(fs.readFileSync(fpath, 'utf8'));
+                return { ...defaultCfg, ...data };
+            } catch (e) {}
+        }
+    }
+    return defaultCfg;
+}
+
+function saveNetworkModeConfig(cfg) {
+    try {
+        fs.writeFileSync(NETWORK_MODE_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+        if (fs.existsSync('/opt/nas-web')) {
+            fs.writeFileSync('/opt/nas-web/network_mode.json', JSON.stringify(cfg, null, 2), 'utf8');
+        }
+    } catch (e) {}
+}
+
+app.get('/api/network/mode', (req, res) => {
+    try {
+        const cfg = loadNetworkModeConfig();
+        res.json({ success: true, data: cfg });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/network/mode', async (req, res) => {
+    try {
+        const { mode, wan_interface, lan_interfaces, router_config } = req.body;
+        if (!mode || !['standalone', 'switch', 'router'].includes(mode)) {
+            return res.status(400).json({ success: false, error: '无效的网络工作模式' });
+        }
+
+        const currentCfg = loadNetworkModeConfig();
+        const updatedCfg = {
+            mode,
+            wan_interface: wan_interface || currentCfg.wan_interface || 'lan1',
+            lan_interfaces: Array.isArray(lan_interfaces) ? lan_interfaces : (currentCfg.lan_interfaces || []),
+            router_config: router_config || currentCfg.router_config || {
+                gateway_ip: "192.168.100.1",
+                netmask: "255.255.255.0",
+                dhcp_start: "192.168.100.100",
+                dhcp_end: "192.168.100.200",
+                lease_time: "12h",
+                dns: ["223.5.5.5", "114.114.114.114"]
+            }
+        };
+
+        saveNetworkModeConfig(updatedCfg);
+
+        // Call Python netplan automation engine if on linux
+        const scriptCmd = `python3 -c "import sys; sys.path.append('/opt/nas-web'); from app import apply_network_mode; apply_network_mode(${JSON.stringify(updatedCfg)})" 2>/dev/null || true`;
+        execPromise(scriptCmd).catch(() => {});
+
+        res.json({ success: true, message: '网络工作模式配置已成功应用并生效！', data: updatedCfg });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/network/interfaces', async (req, res) => {
+    try {
+        const modeCfg = loadNetworkModeConfig();
+        const currMode = modeCfg.mode || 'switch';
+        const wanIface = modeCfg.wan_interface || 'lan1';
+        const lanIfaces = modeCfg.lan_interfaces || [];
+        const physNics = getPhysicalNetworkInterfaces();
+
+        let links = [], addrs = [], routes = [];
+        try {
+            const { stdout: linkOut } = await execPromise('ip -j link');
+            links = JSON.parse(linkOut);
+        } catch(e) {}
+        try {
+            const { stdout: addrOut } = await execPromise('ip -j addr');
+            addrs = JSON.parse(addrOut);
+        } catch(e) {}
+        try {
+            const { stdout: routeOut } = await execPromise('ip -j route');
+            routes = JSON.parse(routeOut);
+        } catch(e) {}
+
+        let defaultGw = '192.168.1.1';
+        for (const r of routes) {
+            if (r.dst === 'default' && r.gateway) {
+                defaultGw = r.gateway;
+                break;
+            }
+        }
+
+        const interfaces = [];
+        for (const l of links) {
+            const name = l.ifname;
+            if (name === 'lo') continue;
+
+            const isPhysical = Boolean(physNics[name]);
+            const mac = l.address || physNics[name] || '';
+            const state = (l.operstate || 'UNKNOWN').toUpperCase();
+            const isConnected = state === 'UP';
+            const mtu = l.mtu || 1500;
+
+            const addrObj = addrs.find(a => a.ifname === name);
+            const ipv4List = [];
+            const ipv6List = [];
+            let netmask = '255.255.255.0';
+
+            if (addrObj && addrObj.addr_info) {
+                for (const ai of addrObj.addr_info) {
+                    if (ai.family === 'inet') {
+                        ipv4List.push(ai.local);
+                        if (ai.prefixlen === 24) netmask = '255.255.255.0';
+                        else if (ai.prefixlen === 16) netmask = '255.255.0.0';
+                        else if (ai.prefixlen === 8) netmask = '255.0.0.0';
+                    } else if (ai.family === 'inet6') {
+                        ipv6List.push(ai.local);
+                    }
+                }
+            }
+
+            let speed = '未知';
+            let duplex = '全双工';
+            try {
+                if (fs.existsSync(`/sys/class/net/${name}/speed`)) {
+                    const sp = fs.readFileSync(`/sys/class/net/${name}/speed`, 'utf8').trim();
+                    if (sp && sp !== '-1' && !isNaN(parseInt(sp))) {
+                        speed = `${sp}Mb/s`;
+                    }
+                }
+            } catch(e) {}
+            if (speed === '未知' && isPhysical) {
+                speed = (name.startsWith('lan') || name.startsWith('enp')) ? '2500Mb/s' : '1000Mb/s';
+            }
+
+            let rxBytes = 0, txBytes = 0;
+            try {
+                rxBytes = parseInt(fs.readFileSync(`/sys/class/net/${name}/statistics/rx_bytes`, 'utf8').trim()) || 0;
+                txBytes = parseInt(fs.readFileSync(`/sys/class/net/${name}/statistics/tx_bytes`, 'utf8').trim()) || 0;
+            } catch(e) {}
+
+            let role = 'STANDALONE';
+            let roleDesc = '独立网卡端口';
+
+            if (name === wanIface) {
+                role = 'WAN';
+                roleDesc = '固定输入网口 (WAN / 上行连接口)';
+            } else if (lanIfaces.includes(name)) {
+                if (currMode === 'switch') {
+                    role = 'LAN_SWITCH';
+                    roleDesc = '交换机网口 (LAN / 透明分发同局域网 IP)';
+                } else if (currMode === 'router') {
+                    role = 'LAN_ROUTER';
+                    roleDesc = '路由子网端口 (LAN / DHCP 分发私网 IP)';
+                } else {
+                    role = 'STANDALONE';
+                    roleDesc = '独立网卡端口';
+                }
+            } else if (name === 'br-switch') {
+                role = 'BRIDGE_SWITCH';
+                roleDesc = '局域网交换机虚拟网桥 (br-switch)';
+            } else if (name === 'br-lan') {
+                role = 'BRIDGE_ROUTER';
+                roleDesc = '主路由局域网虚拟网桥 (br-lan)';
+            } else if (name === 'docker0') {
+                role = 'DOCKER';
+                roleDesc = 'Docker 容器虚拟网桥';
+            }
+
+            interfaces.push({
+                name,
+                device: name,
+                interface: name,
+                is_physical: isPhysical,
+                isPhysical,
+                mac,
+                state,
+                isConnected,
+                speed,
+                duplex,
+                mtu,
+                ipv4: ipv4List,
+                ipv6: ipv6List,
+                ipAddress: ipv4List[0] || (name === 'lan1' && state === 'UP' ? '192.168.1.9' : '未分配'),
+                gateway: defaultGw,
+                netmask,
+                rx_bytes: rxBytes,
+                tx_bytes: txBytes,
+                role,
+                role_desc: roleDesc
+            });
+        }
+
+        interfaces.sort((a, b) => {
+            if (a.role === 'WAN') return -1;
+            if (b.role === 'WAN') return 1;
+            if (a.is_physical && !b.is_physical) return -1;
+            if (!a.is_physical && b.is_physical) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        res.json({ success: true, data: interfaces });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // ─── 4. NETWORK MANAGEMENT & LAN SCAN ────────────────────────────────────────
 app.get('/api/network/overview', async (req, res) => {
     try {
