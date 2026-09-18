@@ -953,17 +953,19 @@ async function fetchNetwork() {
 
                 return `
                     <div class="net-iface-card ${iface.isConnected ? 'connected' : 'disconnected'}" style="background:var(--bg-secondary); border:1px solid ${iface.isConnected ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:8px; padding:16px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <span style="font-weight:700; font-size:16px; font-family:var(--font-mono, monospace); color:var(--text-primary);">${iface.name}</span>
-                                ${iface.is_physical ? '<span class="badge badge-primary" style="font-size:10px; padding:1px 5px;">硬件物理网口</span>' : ''}
+                                ${iface.is_physical ? `<span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); font-size:10px; padding:2px 7px;">⚡ ${iface.hardware_spec || '以太网卡'}</span>` : ''}
                             </div>
                             <div>${roleBadgeHtml}</div>
                         </div>
 
-                        <div style="font-size:12px; color:${stateColor}; margin-bottom:10px; font-weight:600; display:flex; align-items:center; justify-content:space-between;">
+                        <div style="font-size:12px; color:${stateColor}; margin-bottom:10px; font-weight:600; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
                             <span>${stateText}</span>
-                            <span style="color:var(--text-secondary); font-family:var(--font-mono, monospace);">${iface.speed} · ${iface.duplex || '全双工'}</span>
+                            <span style="font-family:var(--font-mono, monospace);">
+                                ${iface.isConnected ? `协商速率: <strong style="color:var(--accent-green);">${iface.speed}</strong> · ${iface.duplex || '全双工'}` : `硬件最高支持: <strong style="color:var(--text-secondary);">${iface.max_speed || '1000Mb/s'}</strong>`}
+                            </span>
                         </div>
 
                         <div style="background:var(--bg-primary); padding:10px 12px; border-radius:6px; font-size:12px; margin-bottom:10px;">
