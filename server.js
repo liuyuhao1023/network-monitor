@@ -1344,6 +1344,34 @@ app.get('/api/network/interfaces', async (req, res) => {
                 }
             }
 
+            // Detect exact physical hardware specs (2.5G vs 1G vs 10G) via sysfs driver
+            let driverName = '';
+            let hardwareSpec = isPhysical ? '以太网卡' : '虚拟网络接口';
+            let maxSpeed = isPhysical ? '1000Mb/s' : '10000Mb/s';
+
+            if (isPhysical) {
+                try {
+                    const drvLink = fs.readlinkSync(`/sys/class/net/${name}/device/driver`);
+                    const parts = drvLink.split('/');
+                    driverName = parts[parts.length - 1] || '';
+                } catch(e) {}
+
+                if (driverName === 'igc' || name.startsWith('lan') || driverName.includes('r8125')) {
+                    hardwareSpec = '2.5G 网卡 (Intel I226-V)';
+                    maxSpeed = '2500Mb/s';
+                } else if (driverName === 'igb' || name.startsWith('enp') || driverName === 'e1000e' || driverName === 'r8169' || driverName === 'tg3') {
+                    hardwareSpec = '千兆网卡 (Intel 82576 / 1Gbps)';
+                    maxSpeed = '1000Mb/s';
+                } else if (driverName === 'ixgbe' || driverName === 'i40e' || driverName.includes('mlx')) {
+                    hardwareSpec = '万兆网卡 (10Gbps SFP+)';
+                    maxSpeed = '10000Mb/s';
+                } else {
+                    hardwareSpec = name.startsWith('lan') ? '2.5G 网卡' : '千兆网卡 (1Gbps)';
+                    maxSpeed = name.startsWith('lan') ? '2500Mb/s' : '1000Mb/s';
+                }
+            }
+
+            // Real negotiated speed
             let speed = '未知';
             let duplex = '全双工';
             try {
@@ -1354,8 +1382,9 @@ app.get('/api/network/interfaces', async (req, res) => {
                     }
                 }
             } catch(e) {}
-            if (speed === '未知' && isPhysical) {
-                speed = (name.startsWith('lan') || name.startsWith('enp')) ? '2500Mb/s' : '1000Mb/s';
+
+            if (speed === '未知') {
+                speed = isConnected ? maxSpeed : '未连通 (待插线)';
             }
 
             let rxBytes = 0, txBytes = 0;
@@ -1417,6 +1446,9 @@ app.get('/api/network/interfaces', async (req, res) => {
                 tx_bytes: txBytes,
                 role,
                 role_desc: roleDesc,
+                hardware_spec: hardwareSpec,
+                max_speed: maxSpeed,
+                driver: driverName,
                 connected_devices: connectedDevs,
                 matched_ips: matchedIps
             });
