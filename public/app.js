@@ -978,10 +978,54 @@ async function fetchNetwork() {
                                 <span style="color:var(--text-secondary);">MAC 硬件地址:</span>
                                 <span class="mono" style="color:var(--text-secondary);">${iface.mac || '-'}</span>
                             </div>
-                            <div class="iface-stat-row" style="display:flex; justify-content:space-between;">
+                            <div class="iface-stat-row" style="display:flex; justify-content:space-between; margin-bottom:3px;">
                                 <span style="color:var(--text-secondary);">MTU / 默认网关:</span>
                                 <span class="mono" style="color:var(--text-secondary);">${iface.mtu} / ${iface.gateway || '-'}</span>
                             </div>
+
+                            <!-- 🔗 下级/直连匹配设备与分发 IP -->
+                            ${(() => {
+                                const connDevs = iface.connected_devices || [];
+                                if (connDevs.length > 0) {
+                                    const devBadges = connDevs.map(d => {
+                                        const isGw = d.isGateway;
+                                        const tagText = isGw ? '上级网关' : (d.hostname ? d.hostname : (iface.role === 'WAN' ? '上级设备' : '下级终端'));
+                                        const tagBg = isGw ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.15)';
+                                        const tagColor = isGw ? '#38bdf8' : '#34d399';
+                                        return `
+                                            <div style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:4px; padding:4px 8px; display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+                                                <div style="display:flex; align-items:center; gap:6px;">
+                                                    <span class="mono" style="font-weight:700; color:var(--text-primary);">${d.ip}</span>
+                                                    <span style="background:${tagBg}; color:${tagColor}; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:600;">${tagText}</span>
+                                                </div>
+                                                <span class="mono" style="color:var(--text-secondary); font-size:10px;">${d.mac || ''}</span>
+                                            </div>
+                                        `;
+                                    }).join('');
+
+                                    const titleText = iface.role === 'WAN' ? '🌐 上级直连设备 / 网关 IP 列表' : '🔗 下级匹配分配 / 接入终端 IP 列表';
+                                    const titleColor = iface.role === 'WAN' ? 'var(--accent-blue)' : 'var(--accent-green)';
+
+                                    return `
+                                        <div style="margin-top:8px; border-top:1px dashed var(--border-color); padding-top:8px;">
+                                            <div style="font-size:11px; font-weight:700; color:${titleColor}; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                                                <span>${titleText}</span>
+                                                <span class="badge badge-secondary" style="font-size:10px; padding:1px 6px;">共 ${connDevs.length} 台设备</span>
+                                            </div>
+                                            <div style="display:flex; flex-direction:column; gap:4px; max-height:140px; overflow-y:auto;">
+                                                ${devBadges}
+                                            </div>
+                                        </div>
+                                    `;
+                                } else if (iface.is_physical) {
+                                    return `
+                                        <div style="margin-top:8px; border-top:1px dashed var(--border-color); padding-top:6px; font-size:11px; color:var(--text-secondary); display:flex; align-items:center; gap:5px;">
+                                            <span>⚪ 暂无匹配到下级设备 (端口空闲 / 待接入设备)</span>
+                                        </div>
+                                    `;
+                                }
+                                return '';
+                            })()}
                         </div>
 
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; font-family:var(--font-mono, monospace);">

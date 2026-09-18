@@ -1198,6 +1198,90 @@ app.post('/api/network/mode', async (req, res) => {
     }
 });
 
+async function getPortConnectedDevices() {
+    const portDevices = {}; // { [portName]: [ { ip, mac, hostname, isGateway } ] }
+    try {
+        let fdbOut = '', neighOut = '', arpOut = '', leasesOut = '';
+        try { const { stdout } = await execPromise('bridge fdb show'); fdbOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('ip neigh show'); neighOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('cat /proc/net/arp'); arpOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('cat /var/lib/misc/dnsmasq.leases /tmp/dnsmasq.leases 2>/dev/null || true'); leasesOut = stdout; } catch(e) {}
+
+        // 1. MAC -> Slave Port from bridge fdb
+        const macToPort = {};
+        for (const line of fdbOut.split('\n')) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 3 && !line.includes('permanent')) {
+                const mac = parts[0].toLowerCase();
+                const devIdx = parts.indexOf('dev');
+                if (devIdx !== -1 && devIdx + 1 < parts.length) {
+                    macToPort[mac] = parts[devIdx + 1];
+                }
+            }
+        }
+
+        // 2. MAC -> Hostname from dnsmasq
+        const macToHostname = {};
+        for (const line of leasesOut.split('\n')) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 4) {
+                const mac = parts[1].toLowerCase();
+                const name = parts[3];
+                if (name && name !== '*') macToHostname[mac] = name;
+            }
+        }
+
+        // 3. IP -> MAC mappings
+        const ipMap = {};
+        for (const line of arpOut.split('\n').slice(1)) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 6) {
+                const ip = parts[0];
+                const mac = parts[3].toLowerCase();
+                const dev = parts[5];
+                if (mac !== '00:00:00:00:00:00') {
+                    ipMap[ip] = { ip, mac, dev };
+                }
+            }
+        }
+
+        for (const line of neighOut.split('\n')) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 4 && parts.includes('lladdr')) {
+                const ip = parts[0];
+                const dev = parts[2];
+                const macIdx = parts.indexOf('lladdr') + 1;
+                const mac = parts[macIdx]?.toLowerCase();
+                if (mac && mac !== '00:00:00:00:00:00' && !ip.startsWith('fe80:')) {
+                    if (!ipMap[ip]) ipMap[ip] = { ip, mac, dev };
+                }
+            }
+        }
+
+        // 4. Group IPs into physical/logical ports
+        for (const [ip, info] of Object.entries(ipMap)) {
+            const mac = info.mac;
+            const dev = info.dev;
+            const actualPort = macToPort[mac] || dev;
+            if (!portDevices[actualPort]) portDevices[actualPort] = [];
+
+            const isGateway = (ip === '192.168.1.1' || ip.endsWith('.1'));
+            const hostname = macToHostname[mac] || '';
+
+            // Avoid duplicates
+            if (!portDevices[actualPort].some(d => d.ip === ip)) {
+                portDevices[actualPort].push({
+                    ip,
+                    mac,
+                    hostname,
+                    isGateway
+                });
+            }
+        }
+    } catch(e) {}
+    return portDevices;
+}
+
 app.get('/api/network/interfaces', async (req, res) => {
     try {
         const modeCfg = loadNetworkModeConfig();
@@ -1205,6 +1289,9 @@ app.get('/api/network/interfaces', async (req, res) => {
         const wanIface = modeCfg.wan_interface || 'lan1';
         const lanIfaces = modeCfg.lan_interfaces || [];
         const physNics = getPhysicalNetworkInterfaces();
+
+        // Query port connected devices (downstream/upstream matched IPs)
+        const portConnectedMap = await getPortConnectedDevices();
 
         let links = [], addrs = [], routes = [];
         try {
@@ -1305,6 +1392,10 @@ app.get('/api/network/interfaces', async (req, res) => {
                 roleDesc = 'Docker 容器虚拟网桥';
             }
 
+            // Downstream/Connected Devices matched to this port
+            const connectedDevs = portConnectedMap[name] || [];
+            const matchedIps = connectedDevs.map(d => d.ip);
+
             interfaces.push({
                 name,
                 device: name,
@@ -1325,7 +1416,9 @@ app.get('/api/network/interfaces', async (req, res) => {
                 rx_bytes: rxBytes,
                 tx_bytes: txBytes,
                 role,
-                role_desc: roleDesc
+                role_desc: roleDesc,
+                connected_devices: connectedDevs,
+                matched_ips: matchedIps
             });
         }
 
