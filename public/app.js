@@ -765,107 +765,272 @@ function showCreateModal() { openModal('modal-create-container'); }
 function setPullImage(img) { document.getElementById('pull-image-input').value = img; }
 
 // ── 4. NETWORK (WITH IPV6 & 4G DUAL-STACK) ───────────────────────────────────
-async function fetchNetwork() {
-    try {
-        const res  = await apiFetch('/api/network/overview');
-        const json = await res.json();
-        if (!json.success) return;
-        const d = json.data;
+// ── 4. NETWORK (WORKING MODE, TOPOLOGY & INTERFACES) ─────────────────────────
+let _cachedNetworkMode = null;
 
-        // Interface cards (Showing IPv4 and IPv6)
-        const grid = document.getElementById('net-interfaces-grid');
-        let wanIp = '未分配';
-        let lanIp = '未分配';
-        
-        // First pass: gather specific interface IPs
-        d.interfaces.forEach(iface => {
-            if (iface.device === 'enp1s0') wanIp = iface.ipAddress || '未分配';
-            if (iface.device === 'enp2s0') lanIp = iface.ipAddress || '未分配';
+function onNetworkModeChange(mode) {
+    const cards = ['standalone', 'switch', 'router'];
+    cards.forEach(m => {
+        const card = document.getElementById(`mode-card-${m}`);
+        if (card) {
+            if (m === mode) {
+                card.style.border = m === 'router' ? '2px solid var(--accent-purple)' : (m === 'switch' ? '2px solid var(--accent-green)' : '2px solid var(--accent-blue)');
+            } else {
+                card.style.border = '2px solid var(--border-color)';
+            }
+        }
+    });
+
+    const routerParams = document.getElementById('router-mode-params');
+    if (routerParams) {
+        routerParams.style.display = (mode === 'router') ? 'block' : 'none';
+    }
+}
+
+function selectAllLanInterfaces() {
+    const wan = document.getElementById('net-mode-wan-select')?.value;
+    document.querySelectorAll('.lan-port-chk').forEach(chk => {
+        if (chk.value !== wan) {
+            chk.checked = true;
+        }
+    });
+}
+
+async function fetchNetworkMode() {
+    try {
+        const res = await apiFetch('/api/network/mode');
+        const json = await res.json();
+        if (!json.success || !json.data) return;
+        const d = json.data;
+        _cachedNetworkMode = d;
+
+        // 1. Update Mode Radio & Cards
+        const modeRadios = document.querySelectorAll('input[name="network-work-mode"]');
+        modeRadios.forEach(r => {
+            if (r.value === d.mode) {
+                r.checked = true;
+                onNetworkModeChange(d.mode);
+            }
         });
 
-        grid.innerHTML = d.interfaces.map(iface => {
-            const tr = d.trafficStatsKB[iface.device] || {};
-            let isEnp2s0 = false;
-            let isSwitchMode = false;
-            if (iface.device === 'enp2s0') {
-                isEnp2s0 = true;
-                isSwitchMode = (d.enp2s0Mode === 'switch_share');
+        // 2. Update Status Badge
+        const statusBadge = document.getElementById('current-mode-status-badge');
+        if (statusBadge) {
+            if (d.mode === 'switch') {
+                statusBadge.innerHTML = `<span class="badge badge-success" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-circle-check"></i> 当前运行模式：局域网交换机模式 (Switch)</span>`;
+            } else if (d.mode === 'router') {
+                statusBadge.innerHTML = `<span class="badge badge-primary" style="font-size:12px; padding:4px 10px; background:rgba(168,85,247,0.2); color:#c084fc; border-color:rgba(168,85,247,0.4);"><i class="fa-solid fa-router"></i> 当前运行模式：全功能主路由模式 (Router)</span>`;
+            } else {
+                statusBadge.innerHTML = `<span class="badge badge-secondary" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-plug"></i> 当前运行模式：独立网卡模式 (Standalone)</span>`;
             }
-            
-            if (isEnp2s0) {
-                const switchCard = document.getElementById('enp2s0-switch-card');
-                if (switchCard) {
-                    switchCard.style.display = 'block';
-                    const wanEl = document.getElementById('switch-wan-ip');
-                    const lanEl = document.getElementById('switch-lan-ip');
-                    if (wanEl) wanEl.textContent = wanIp;
-                    if (lanEl) lanEl.textContent = isSwitchMode ? lanIp : '-';
-                    
-                    const infoDiv = document.getElementById('enp2s0-switch-info');
-                    if (infoDiv) infoDiv.style.display = isSwitchMode ? 'grid' : 'none';
-                    const radios = switchCard.querySelectorAll('input[name="enp2s0-mode-main"]');
-                    radios.forEach(r => {
-                        if (r.value === 'switch_share') r.checked = isSwitchMode;
-                        if (r.value === 'traditional') r.checked = !isSwitchMode;
-                    });
-                    
-                    const statsDiv = document.getElementById('enp2s0-dhcp-stats');
-                    if (statsDiv) {
-                        if (isSwitchMode) {
-                            statsDiv.style.display = 'block';
-                            fetchDhcpLeases();
-                        } else {
-                            statsDiv.style.display = 'none';
-                        }
-                    }
+        }
+
+        // 3. Update WAN Selector
+        const wanSelect = document.getElementById('net-mode-wan-select');
+        if (wanSelect && d.wan_interface) {
+            wanSelect.value = d.wan_interface;
+        }
+
+        // 4. Update LAN Checkboxes
+        const lans = d.lan_interfaces || [];
+        document.querySelectorAll('.lan-port-chk').forEach(chk => {
+            chk.checked = lans.includes(chk.value);
+        });
+
+        // 5. Update Router Config
+        const rCfg = d.router_config || {};
+        if (document.getElementById('router-cfg-gateway')) document.getElementById('router-cfg-gateway').value = rCfg.gateway_ip || '192.168.100.1';
+        if (document.getElementById('router-cfg-netmask')) document.getElementById('router-cfg-netmask').value = rCfg.netmask || '255.255.255.0';
+        if (document.getElementById('router-cfg-start')) document.getElementById('router-cfg-start').value = rCfg.dhcp_start || '192.168.100.100';
+        if (document.getElementById('router-cfg-end')) document.getElementById('router-cfg-end').value = rCfg.dhcp_end || '192.168.100.200';
+    } catch(e) {
+        console.error('fetchNetworkMode error:', e);
+    }
+}
+
+async function applyNetworkWorkingMode() {
+    const selectedMode = document.querySelector('input[name="network-work-mode"]:checked')?.value || 'switch';
+    const wanIface = document.getElementById('net-mode-wan-select')?.value || 'lan1';
+
+    const lanIfaces = [];
+    document.querySelectorAll('.lan-port-chk:checked').forEach(chk => {
+        if (chk.value !== wanIface) lanIfaces.push(chk.value);
+    });
+
+    const routerConfig = {
+        gateway_ip: document.getElementById('router-cfg-gateway')?.value?.trim() || '192.168.100.1',
+        netmask: document.getElementById('router-cfg-netmask')?.value?.trim() || '255.255.255.0',
+        dhcp_start: document.getElementById('router-cfg-start')?.value?.trim() || '192.168.100.100',
+        dhcp_end: document.getElementById('router-cfg-end')?.value?.trim() || '192.168.100.200',
+        lease_time: '12h',
+        dns: ['223.5.5.5', '114.114.114.114']
+    };
+
+    const modeLabels = {
+        'switch': '局域网交换机扩展模式 (Bridge / Switch)',
+        'router': '全功能主路由模式 (Router / Gateway)',
+        'standalone': '独立网卡模式 (Standalone)'
+    };
+
+    if (!confirm(`确定要将 NAS 网络工作模式切换为【${modeLabels[selectedMode]}】吗？\n\n- 输入 WAN 口: ${wanIface}\n- 扩展 LAN 口: ${lanIfaces.join(', ') || '无'}\n\n系统将自动生成 Netplan 拓扑并平滑应用配置。`)) {
+        return;
+    }
+
+    const btn = document.getElementById('btn-save-network-mode');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在应用网络配置...';
+    }
+
+    try {
+        const res = await apiFetch('/api/network/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: selectedMode,
+                wan_interface: wanIface,
+                lan_interfaces: lanIfaces,
+                router_config: routerConfig
+            })
+        });
+        const json = await res.json();
+        if (json.success) {
+            alert('✅ ' + (json.message || '网络工作模式配置成功！已平滑重载系统网络。'));
+            fetchNetwork();
+            fetchDhcpLeases();
+        } else {
+            alert('❌ 配置应用失败: ' + json.error);
+        }
+    } catch(e) {
+        alert('❌ 请求异常: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存并应用网络工作模式';
+        }
+    }
+}
+
+async function fetchNetwork() {
+    try {
+        // Fetch Mode and Interfaces in parallel
+        await fetchNetworkMode();
+
+        const [resIface, resOverview] = await Promise.all([
+            apiFetch('/api/network/interfaces'),
+            apiFetch('/api/network/overview')
+        ]);
+
+        const jsonIface = await resIface.json();
+        const jsonOverview = await resOverview.json();
+        if (!jsonIface.success) return;
+
+        const ifaces = jsonIface.data || [];
+        const trafficStats = jsonOverview.data?.trafficStatsKB || {};
+
+        // Render Physical & Virtual Interface Cards with Roles
+        const grid = document.getElementById('net-interfaces-grid');
+        if (grid) {
+            grid.innerHTML = ifaces.map(iface => {
+                const tr = trafficStats[iface.name] || { rxKB: Math.round(iface.rx_bytes / 1024), txKB: Math.round(iface.tx_bytes / 1024), rxSpeedKBs: 0, txSpeedKBs: 0 };
+                
+                // Role Badge Styling
+                let roleBadgeHtml = '';
+                if (iface.role === 'WAN') {
+                    roleBadgeHtml = `<span class="badge" style="background:rgba(59,130,246,0.15); color:#38bdf8; border:1px solid rgba(59,130,246,0.3); font-size:11px; padding:2px 8px;"><i class="fa-solid fa-arrow-down-up-across-line"></i> 🔵 输入网口 (WAN)</span>`;
+                } else if (iface.role === 'LAN_SWITCH') {
+                    roleBadgeHtml = `<span class="badge" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.3); font-size:11px; padding:2px 8px;"><i class="fa-solid fa-network-wired"></i> 🟢 交换机端口 (LAN)</span>`;
+                } else if (iface.role === 'LAN_ROUTER') {
+                    roleBadgeHtml = `<span class="badge" style="background:rgba(168,85,247,0.15); color:#c084fc; border:1px solid rgba(168,85,247,0.3); font-size:11px; padding:2px 8px;"><i class="fa-solid fa-router"></i> 🟣 路由子网端口 (LAN)</span>`;
+                } else if (iface.role === 'BRIDGE_SWITCH' || iface.role === 'BRIDGE_ROUTER') {
+                    roleBadgeHtml = `<span class="badge badge-secondary" style="font-size:11px; padding:2px 8px;">🖧 虚拟网桥 (Bridge)</span>`;
+                } else {
+                    roleBadgeHtml = `<span class="badge badge-secondary" style="font-size:11px; padding:2px 8px;">⚪ ${iface.is_physical ? '独立物理网口' : '虚拟接口'}</span>`;
                 }
-            }
-            return `
-                <div class="net-iface-card ${iface.isConnected ? 'connected' : 'disconnected'}">
-                    <div class="iface-name">${iface.device}</div>
-                    <div class="iface-status" style="color:${iface.isConnected ? 'var(--accent-green)' : 'var(--accent-danger)'}">
-                        ${iface.isConnected ? '● 已连接' : '○ 未连接'} · ${iface.speed || '速率未知'}
+
+                const stateColor = iface.isConnected ? 'var(--accent-green)' : 'var(--text-secondary)';
+                const stateText = iface.isConnected ? '● 链路已连通 (UP)' : '○ 链路未连接 (DOWN)';
+
+                return `
+                    <div class="net-iface-card ${iface.isConnected ? 'connected' : 'disconnected'}" style="background:var(--bg-secondary); border:1px solid ${iface.isConnected ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:8px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-weight:700; font-size:16px; font-family:var(--font-mono, monospace); color:var(--text-primary);">${iface.name}</span>
+                                ${iface.is_physical ? '<span class="badge badge-primary" style="font-size:10px; padding:1px 5px;">硬件物理网口</span>' : ''}
+                            </div>
+                            <div>${roleBadgeHtml}</div>
+                        </div>
+
+                        <div style="font-size:12px; color:${stateColor}; margin-bottom:10px; font-weight:600; display:flex; align-items:center; justify-content:space-between;">
+                            <span>${stateText}</span>
+                            <span style="color:var(--text-secondary); font-family:var(--font-mono, monospace);">${iface.speed} · ${iface.duplex || '全双工'}</span>
+                        </div>
+
+                        <div style="background:var(--bg-primary); padding:10px 12px; border-radius:6px; font-size:12px; margin-bottom:10px;">
+                            <div style="font-size:11px; color:var(--accent-blue); margin-bottom:6px; font-weight:600;">
+                                📌 用途角色: ${iface.role_desc || '普通以太网连接'}
+                            </div>
+                            <div class="iface-stat-row" style="display:flex; justify-content:space-between; margin-bottom:3px;">
+                                <span style="color:var(--text-secondary);">IPv4 地址:</span>
+                                <span class="mono" style="font-weight:600; color:var(--accent-blue);">${iface.ipAddress}</span>
+                            </div>
+                            <div class="iface-stat-row" style="display:flex; justify-content:space-between; margin-bottom:3px;">
+                                <span style="color:var(--text-secondary);">MAC 硬件地址:</span>
+                                <span class="mono" style="color:var(--text-secondary);">${iface.mac || '-'}</span>
+                            </div>
+                            <div class="iface-stat-row" style="display:flex; justify-content:space-between;">
+                                <span style="color:var(--text-secondary);">MTU / 默认网关:</span>
+                                <span class="mono" style="color:var(--text-secondary);">${iface.mtu} / ${iface.gateway || '-'}</span>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; font-family:var(--font-mono, monospace);">
+                            <div style="background:rgba(16,185,129,0.08); padding:6px 8px; border-radius:4px; color:var(--accent-green);">
+                                ↓ 接收: ${fmtKB(tr.rxKB)} (${tr.rxSpeedKBs || 0} KB/s)
+                            </div>
+                            <div style="background:rgba(59,130,246,0.08); padding:6px 8px; border-radius:4px; color:var(--accent-blue);">
+                                ↑ 发送: ${fmtKB(tr.txKB)} (${tr.txSpeedKBs || 0} KB/s)
+                            </div>
+                        </div>
                     </div>
-                    <div class="iface-stat-row"><span>IPv4 地址</span><span class="iface-stat-val">${iface.ipAddress}</span></div>
-                    <div class="iface-stat-row"><span>IPv6 地址</span><span class="iface-stat-val" style="font-size:11px;word-break:break-all;">${iface.ipv6Address || '未分配'}</span></div>
-                    <div class="iface-stat-row"><span>连接名称</span><span class="iface-stat-val">${iface.connection}</span></div>
-                    <div class="iface-stat-row"><span>双工模式</span><span class="iface-stat-val">${iface.duplex || '-'}</span></div>
-                    <div class="iface-stat-row"><span>↓ 接收 / ↑ 发送</span><span class="iface-stat-val">${fmtKB(tr.rxKB)} / ${fmtKB(tr.txKB)}</span></div>
-                    <div class="iface-stat-row"><span>下载速率</span><span class="iface-stat-val" style="color:var(--accent-green)">↓ ${tr.rxSpeedKBs || 0} KB/s</span></div>
-                    <div class="iface-stat-row"><span>上传速率</span><span class="iface-stat-val" style="color:var(--accent-blue)">↑ ${tr.txSpeedKBs || 0} KB/s</span></div>
-                </div>`;
-        }).join('');
+                `;
+            }).join('');
+        }
 
         // Modem status & 4G cellular specific stats (IPv4 + IPv6)
-        const m = d.modemStatus;
-        document.getElementById('modem-model').textContent  = m.model;
-        document.getElementById('modem-signal').textContent = m.found ? `${m.operator} · 信号 ${m.signal}% (${m.state})` : '未检测到模组';
-        document.getElementById('modem-speed').textContent  = `↓ ${m.rxSpeedKBs || 0} KB/s  ↑ ${m.txSpeedKBs || 0} KB/s`;
-        document.getElementById('modem-traffic-total').textContent = fmtKB(m.totalKB || 0);
-
-        document.getElementById('modem-ip4').textContent   = m.ipAddress || '未分配';
-        document.getElementById('modem-ip6').textContent   = m.ipv6Address || '未分配';
-
-        document.getElementById('modem-dev').textContent   = m.devName || 'wwp0s21f0u4i4';
-        document.getElementById('modem-rx-kb').textContent = fmtKB(m.rxKB || 0);
-        document.getElementById('modem-tx-kb').textContent = fmtKB(m.txKB || 0);
+        if (jsonOverview.data?.modemStatus) {
+            const m = jsonOverview.data.modemStatus;
+            if (document.getElementById('modem-model')) document.getElementById('modem-model').textContent = m.model || 'Fibocom NL668';
+            if (document.getElementById('modem-signal')) document.getElementById('modem-signal').textContent = m.found ? `${m.operator} · 信号 ${m.signal}% (${m.state})` : '未检测到模组';
+            if (document.getElementById('modem-speed')) document.getElementById('modem-speed').textContent = `↓ ${m.rxSpeedKBs || 0} KB/s  ↑ ${m.txSpeedKBs || 0} KB/s`;
+            if (document.getElementById('modem-traffic-total')) document.getElementById('modem-traffic-total').textContent = fmtKB(m.totalKB || 0);
+            if (document.getElementById('modem-ip4')) document.getElementById('modem-ip4').textContent = m.ipAddress || '未分配';
+            if (document.getElementById('modem-ip6')) document.getElementById('modem-ip6').textContent = m.ipv6Address || '未分配';
+            if (document.getElementById('modem-dev')) document.getElementById('modem-dev').textContent = m.devName || 'wwp0s21f0u4i4';
+            if (document.getElementById('modem-rx-kb')) document.getElementById('modem-rx-kb').textContent = fmtKB(m.rxKB || 0);
+            if (document.getElementById('modem-tx-kb')) document.getElementById('modem-tx-kb').textContent = fmtKB(m.txKB || 0);
+        }
 
         // Traffic table
         const tbody = document.getElementById('traffic-table-body');
-        const devs  = Object.keys(d.trafficStatsKB).filter(k => !k.startsWith('veth') && k !== 'lo');
-        tbody.innerHTML = devs.map(dev => {
-            const t = d.trafficStatsKB[dev];
-            return `<tr>
-                <td style="font-weight:600;">${dev}</td>
-                <td style="font-family:'Fira Code';font-size:12px;">${fmtKB(t.rxKB)}</td>
-                <td style="font-family:'Fira Code';font-size:12px;">${fmtKB(t.txKB)}</td>
-                <td style="font-family:'Fira Code';font-size:12px;">${fmtKB(t.totalKB)}</td>
-                <td style="color:var(--accent-green);font-family:'Fira Code';font-size:12px;">${t.rxSpeedKBs} KB/s</td>
-                <td style="color:var(--accent-blue);font-family:'Fira Code';font-size:12px;">${t.txSpeedKBs} KB/s</td>
-            </tr>`;
-        }).join('');
+        if (tbody) {
+            const devs = Object.keys(trafficStats).filter(k => !k.startsWith('veth') && k !== 'lo');
+            tbody.innerHTML = devs.map(dev => {
+                const t = trafficStats[dev] || {};
+                return `<tr>
+                    <td style="font-weight:600;">${dev}</td>
+                    <td style="font-family:'Fira Code', monospace;font-size:12px;">${fmtKB(t.rxKB || 0)}</td>
+                    <td style="font-family:'Fira Code', monospace;font-size:12px;">${fmtKB(t.txKB || 0)}</td>
+                    <td style="font-family:'Fira Code', monospace;font-size:12px;">${fmtKB(t.totalKB || 0)}</td>
+                    <td style="color:var(--accent-green);font-family:'Fira Code', monospace;font-size:12px;">${t.rxSpeedKBs || 0} KB/s</td>
+                    <td style="color:var(--accent-blue);font-family:'Fira Code', monospace;font-size:12px;">${t.txSpeedKBs || 0} KB/s</td>
+                </tr>`;
+            }).join('');
+        }
 
-    } catch (e) { console.error('fetchNetwork error:', e); }
+    } catch (e) {
+        console.error('fetchNetwork error:', e);
+    }
 }
 
 async function controlCellular(action) {
