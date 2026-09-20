@@ -3713,35 +3713,34 @@ async function queryUpsTcpServer(host, port = 8887, cmd = 'Q1', timeoutMs = 2500
 
 // ─── NUT (Network UPS Tools) USB / Client Driver Helper ────────────────────
 async function fetchNutUpsData(targetName = '', host = '127.0.0.1', port = 3493) {
-    try {
-        let name = targetName || '';
-        if (!name || name === 'SANTAK 在线式 UPS' || name === 'ups' || name === 'CPS UT650EGC') {
-            try {
-                const { stdout: listOut } = await execPromise('upsc -l 2>/dev/null');
-                const lines = (listOut || '').split('\n').map(s => s.trim()).filter(Boolean);
-                if (lines.includes('cyberpower')) name = 'cyberpower';
-                else if (lines.length > 0) name = lines[0];
-            } catch(e){}
-        }
-        if (!name) name = 'cyberpower';
-
-        const { stdout } = await execPromise(`upsc ${name}@${host} 2>/dev/null || upsc cyberpower@${host} 2>/dev/null || upsc ups@${host} 2>/dev/null`);
-        const upscRaw = (stdout || '').trim();
-        if (!upscRaw || upscRaw.includes('Connection refused') || upscRaw.includes('Error:')) return null;
-
-        const kv = {};
-        upscRaw.split('\n').forEach(line => {
-            const colonIdx = line.indexOf(':');
-            if (colonIdx !== -1) {
-                kv[line.substring(0, colonIdx).trim()] = line.substring(colonIdx + 1).trim();
-            }
-        });
-
-        if (Object.keys(kv).length === 0) return null;
-        return { kv, rawText: upscRaw, upsName: name };
-    } catch(e) {
-        return null;
+    let name = targetName || '';
+    if (!name || name === 'SANTAK 在线式 UPS' || name === 'ups' || name === 'CPS UT650EGC') {
+        name = 'cyberpower';
     }
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const { stdout } = await execPromise(`upsc ${name}@${host}:${port} 2>/dev/null || upsc cyberpower@${host}:${port} 2>/dev/null || upsc ${name}@${host} 2>/dev/null || upsc cyberpower@127.0.0.1 2>/dev/null || upsc ups@127.0.0.1 2>/dev/null`, { timeout: 2500 });
+            const upscRaw = (stdout || '').trim();
+            if (upscRaw && !upscRaw.includes('Connection refused') && !upscRaw.includes('Error:')) {
+                const kv = {};
+                upscRaw.split('\n').forEach(line => {
+                    const colonIdx = line.indexOf(':');
+                    if (colonIdx !== -1) {
+                        kv[line.substring(0, colonIdx).trim()] = line.substring(colonIdx + 1).trim();
+                    }
+                });
+
+                if (Object.keys(kv).length > 0) {
+                    return { kv, rawText: upscRaw, upsName: name };
+                }
+            }
+        } catch(e) {}
+        if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 200));
+        }
+    }
+    return null;
 }
 
 function buildNutUpsPayload(config, kv = {}, upscRaw = '') {
@@ -3924,34 +3923,45 @@ let lastUpsState = {
     initialized: false
 };
 
+let upsOfflineConsecutiveCount = 0;
+const OFFLINE_ALERT_THRESHOLD = 4; // Require 4 consecutive offline ticks (~12s) to prevent transient glitch alarms
+
 let lastUpsCache = { data: null, timestamp: 0 };
 
 async function checkUpsWatchdog() {
     try {
         const config = loadUpsConfig();
         const livePayload = await queryUpsStatusUnified(config);
-        const isOnline = livePayload.isOnline;
+        const isOnline = !!livePayload.isOnline;
 
-        // Disconnection Handling
+        // Disconnection Handling with Debounce
         if (!isOnline) {
-            if (lastUpsState.isOnline === true) {
-                lastUpsState.isOnline = false;
-                const disconnectDetail = `UPS 通信中断，主板 USB 接口或串口服务器已断开连接。`;
-                addUpsEvent('system', '⚠️ 警报：UPS 通信中断，设备已离线！', disconnectDetail, 'danger');
+            upsOfflineConsecutiveCount++;
+            if (upsOfflineConsecutiveCount === OFFLINE_ALERT_THRESHOLD) {
+                if (lastUpsState.isOnline === true || lastUpsState.isOnline === null) {
+                    lastUpsState.isOnline = false;
+                    const disconnectDetail = `UPS 通信中断超过 12 秒，主板 USB 接口或 NUT 驱动已断开连接。`;
+                    addUpsEvent('system', '⚠️ 警报：UPS 通信中断，设备已离线！', disconnectDetail, 'danger');
 
-                if (config.notifyEnable !== false && config.notifyOnOutage !== false) {
-                    sendUpsPushNotification({
-                        type: 'offline',
-                        title: '⚠️【紧急告警】UPS 通信丢失，设备已离线！',
-                        message: disconnectDetail,
-                        level: 'danger'
-                    });
+                    if (config.notifyEnable !== false && config.notifyOnOutage !== false) {
+                        sendUpsPushNotification({
+                            type: 'offline',
+                            title: '⚠️【紧急告警】UPS 通信丢失，设备已离线！',
+                            message: disconnectDetail,
+                            level: 'danger'
+                        });
+                    }
                 }
             }
-            lastUpsState.isOnline = false;
+            if (upsOfflineConsecutiveCount >= OFFLINE_ALERT_THRESHOLD) {
+                lastUpsState.isOnline = false;
+            }
             lastUpsState.initialized = true;
             return;
         }
+
+        // Connection is online -> reset offline counter
+        upsOfflineConsecutiveCount = 0;
 
         // Connection restored
         if (lastUpsState.isOnline === false && lastUpsState.initialized) {
@@ -4598,8 +4608,11 @@ app.post('/api/ups/config', async (req, res) => {
     try {
         const currentCfg = loadUpsConfig();
         const newCfg = { ...currentCfg, ...req.body };
+        if (newCfg.mode === 'cyberpower_usb' || newCfg.mode === 'apc_usb') {
+            newCfg.tcpHost = '';
+        }
         fs.writeFileSync(UPS_CONFIG_FILE, JSON.stringify(newCfg, null, 2), 'utf8');
-        addUpsEvent('ops', 'UPS 配置与推送设置已更新', `更新参数: 模式=${newCfg.mode}, 目标=${newCfg.tcpHost}:${newCfg.tcpPort}, 断电推送=${newCfg.notifyEnable ? '已开启' : '已关闭'}`, 'info');
+        addUpsEvent('ops', 'UPS 配置与推送设置已更新', `更新参数: 模式=${newCfg.mode}, 设备=${newCfg.upsName}, 断电推送=${newCfg.notifyEnable ? '已开启' : '已关闭'}`, 'info');
         res.json({ success: true, message: 'UPS 配置及推送参数已成功保存！' });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
