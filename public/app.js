@@ -3417,6 +3417,9 @@ async function fetchUpsStatus() {
             const notifyLowbatEl = document.getElementById('ups-cfg-notify-lowbat');
             if (notifyLowbatEl) notifyLowbatEl.checked = data.config.notifyOnLowBattery !== false;
 
+            const notifyOfflineEl = document.getElementById('ups-cfg-notify-offline');
+            if (notifyOfflineEl) notifyOfflineEl.checked = data.config.notifyOnOffline === true;
+
             const notifyDelayEl = document.getElementById('ups-cfg-notify-delay');
             if (notifyDelayEl) notifyDelayEl.value = data.config.notifyDelaySec || 2;
 
@@ -3532,6 +3535,7 @@ async function saveUpsConfig() {
     const notifyOnOutage = document.getElementById('ups-cfg-notify-outage')?.checked ?? true;
     const notifyOnRestore = document.getElementById('ups-cfg-notify-restore')?.checked ?? true;
     const notifyOnLowBattery = document.getElementById('ups-cfg-notify-lowbat')?.checked ?? true;
+    const notifyOnOffline = document.getElementById('ups-cfg-notify-offline')?.checked ?? false;
     const notifyDelaySec = parseInt(document.getElementById('ups-cfg-notify-delay')?.value) || 2;
 
     try {
@@ -3549,6 +3553,7 @@ async function saveUpsConfig() {
                 notifyOnOutage,
                 notifyOnRestore,
                 notifyOnLowBattery,
+                notifyOnOffline,
                 notifyDelaySec
             })
         });

@@ -17,6 +17,7 @@
   "notifyOnOutage": true,
   "notifyOnRestore": true,
   "notifyOnLowBattery": true,
+  "notifyOnOffline": false,
   "notifyDelaySec": 2,
   "notifyWebhookUrl": ""
 }

@@ -3524,6 +3524,7 @@ function loadUpsConfig() {
                 notifyOnOutage: true,
                 notifyOnRestore: true,
                 notifyOnLowBattery: true,
+                notifyOnOffline: false,
                 notifyDelaySec: 2
             };
             fs.writeFileSync(UPS_CONFIG_FILE, JSON.stringify(defCfg, null, 2), 'utf8');
@@ -3538,6 +3539,7 @@ function loadUpsConfig() {
         if (cfg.notifyOnOutage === undefined) cfg.notifyOnOutage = true;
         if (cfg.notifyOnRestore === undefined) cfg.notifyOnRestore = true;
         if (cfg.notifyOnLowBattery === undefined) cfg.notifyOnLowBattery = true;
+        if (cfg.notifyOnOffline === undefined) cfg.notifyOnOffline = false;
         if (cfg.notifyDelaySec === undefined) cfg.notifyDelaySec = 2;
         if (cfg.notifyWebhookUrl === undefined) cfg.notifyWebhookUrl = '';
         return cfg;
@@ -3556,6 +3558,7 @@ function loadUpsConfig() {
             notifyOnOutage: true,
             notifyOnRestore: true,
             notifyOnLowBattery: true,
+            notifyOnOffline: false,
             notifyDelaySec: 2
         };
     }
@@ -3943,7 +3946,7 @@ async function checkUpsWatchdog() {
                     const disconnectDetail = `UPS 通信中断超过 12 秒，主板 USB 接口或 NUT 驱动已断开连接。`;
                     addUpsEvent('system', '⚠️ 警报：UPS 通信中断，设备已离线！', disconnectDetail, 'danger');
 
-                    if (config.notifyEnable !== false && config.notifyOnOutage !== false) {
+                    if (config.notifyEnable !== false && config.notifyOnOffline === true) {
                         sendUpsPushNotification({
                             type: 'offline',
                             title: '⚠️【紧急告警】UPS 通信丢失，设备已离线！',
