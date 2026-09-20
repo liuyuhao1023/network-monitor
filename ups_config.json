@@ -1,6 +1,6 @@
 {
-  "mode": "auto",
-  "tcpHost": "192.168.1.8",
+  "mode": "cyberpower_usb",
+  "tcpHost": "",
   "tcpPort": 8887,
   "port": "/dev/ttyUSB0",
   "baudRate": 9600,

@@ -3381,16 +3381,19 @@ async function fetchUpsStatus() {
         // Config subtab inputs
         if (data.config) {
             const modeEl = document.getElementById('ups-cfg-mode');
-            if (modeEl) modeEl.value = data.config.mode || 'serial_tcp';
+            if (modeEl) {
+                modeEl.value = data.config.mode || 'cyberpower_usb';
+                toggleUpsPortInput();
+            }
 
             const tcpHostEl = document.getElementById('ups-cfg-tcphost');
-            if (tcpHostEl) tcpHostEl.value = data.config.tcpHost || '192.168.1.8';
+            if (tcpHostEl) tcpHostEl.value = data.config.tcpHost || '';
 
             const tcpPortEl = document.getElementById('ups-cfg-tcpport');
             if (tcpPortEl) tcpPortEl.value = data.config.tcpPort || 8887;
 
             const nameEl = document.getElementById('ups-cfg-name');
-            if (nameEl) nameEl.value = data.config.upsName || 'SANTAK 在线式 UPS';
+            if (nameEl) nameEl.value = data.config.upsName || 'cyberpower';
 
             const lowEl = document.getElementById('ups-cfg-lowbat');
             if (lowEl) lowEl.value = data.config.lowBatteryPct || 20;
@@ -3518,10 +3521,10 @@ async function testUpsPushNotification() {
 }
 
 async function saveUpsConfig() {
-    const mode = document.getElementById('ups-cfg-mode')?.value || 'serial_tcp';
-    const tcpHost = document.getElementById('ups-cfg-tcphost')?.value || '192.168.1.8';
+    const mode = document.getElementById('ups-cfg-mode')?.value || 'cyberpower_usb';
+    const tcpHost = document.getElementById('ups-cfg-tcphost')?.value || '';
     const tcpPort = parseInt(document.getElementById('ups-cfg-tcpport')?.value) || 8887;
-    const upsName = document.getElementById('ups-cfg-name')?.value || 'SANTAK 在线式 UPS';
+    const upsName = document.getElementById('ups-cfg-name')?.value || 'cyberpower';
     const lowBatteryPct = parseInt(document.getElementById('ups-cfg-lowbat')?.value) || 20;
 
     const notifyEnable = document.getElementById('ups-cfg-notify-enable')?.checked ?? true;

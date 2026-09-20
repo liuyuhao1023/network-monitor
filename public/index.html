@@ -1963,7 +1963,7 @@
                                         <tr><td class="info-key">输出功率 (有功/视在)</td><td class="info-val" id="ups-dash-power-real">64 W / 80 VA (8%)</td></tr>
                                         <tr><td class="info-key">电网频率 / 内部温度</td><td class="info-val"><span id="ups-dash-freq">50.0 Hz</span> · <span id="ups-dash-temp">48.0 °C</span></td></tr>
                                         <tr><td class="info-key">散热风扇转速</td><td class="info-val" style="color:var(--accent-blue); font-weight:700;"><i class="fa-solid fa-fan" style="margin-right:4px;"></i><span id="ups-dash-fan">2,160 RPM (45% PWM 智能静音温控)</span></td></tr>
-                                        <tr><td class="info-key">通信与采集方式</td><td class="info-val" style="color:var(--accent-green);" id="ups-dash-conntype">串口服务器 192.168.1.8:8887 (RS-232)</td></tr>
+                                        <tr><td class="info-key">通信与采集方式</td><td class="info-val" style="color:var(--accent-green);" id="ups-dash-conntype">主板直连 USB-HID 通信 (硕天 CyberPower UT650EGC)</td></tr>
                                     </table>
                                 </div>
 
@@ -2592,21 +2592,21 @@
                                     <div>
                                         <label>UPS 通信协议与接入方式</label>
                                         <select id="ups-cfg-mode" class="form-input" onchange="toggleUpsPortInput()">
-                                            <option value="auto" selected>⚡ 智能自适应全自动探测 (自动识别 USB 硕天/APC/NUT 或 TCP 串口服务器)</option>
-                                            <option value="cyberpower_usb">🔌 硕天 (CyberPower) USB 直连 (UT650EGC / CP1500 / USB-HID)</option>
-                                            <option value="santak_tcp">🌐 山特 (SANTAK) 串口服务器 (TCP/IP 转 RS-232, 192.168.1.8:8887)</option>
+                                            <option value="cyberpower_usb" selected>🔌 硕天 (CyberPower) USB 直连 (UT650EGC / CP1500 / USB-HID)</option>
+                                            <option value="auto">⚡ 智能自适应全自动探测 (自动识别 USB 硕天/APC/NUT 或 TCP 串口服务器)</option>
+                                            <option value="santak_tcp">🌐 山特 (SANTAK) 串口服务器 (TCP/IP 转 RS-232)</option>
                                             <option value="apc_usb">🔌 APC USB / Smart-UPS 直连 (usbhid-ups / apcupsd)</option>
                                             <option value="nut_service">🌐 通用 NUT 客户端 (本地/远程 upsc [name]@[host]:[port])</option>
                                             <option value="rs232_serial">🔌 本地 RS-232 硬件串口 (ttyUSB / ttyS)</option>
                                             <option value="snmp">🌐 SNMP 网络管理卡 (APC / 山特 / 艾默生网络卡)</option>
                                         </select>
                                     </div>
-                                    <div id="ups-tcp-host-group">
-                                        <label>串口服务器 / NUT 主机 IP 地址</label>
-                                        <input type="text" id="ups-cfg-tcphost" class="form-input" value="192.168.1.8" placeholder="192.168.1.8 / 127.0.0.1">
+                                    <div id="ups-tcp-host-group" style="display:none;">
+                                         <label>串口服务器 / NUT 主机 IP 地址</label>
+                                         <input type="text" id="ups-cfg-tcphost" class="form-input" value="" placeholder="192.168.1.8 / 127.0.0.1">
                                     </div>
-                                    <div id="ups-tcp-port-group">
-                                        <label>TCP 端口号</label>
+                                     <div id="ups-tcp-port-group" style="display:none;">
+                                         <label>TCP 端口号</label>
                                         <input type="number" id="ups-cfg-tcpport" class="form-input" value="8887" placeholder="8887 / 3493">
                                     </div>
                                     <div>

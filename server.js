@@ -2872,37 +2872,39 @@ app.get('/api/serial/list', async (req, res) => {
             });
         });
 
-        // 3. Probe and report network TCP Serial Server (e.g. 192.168.1.8:8887)
+        // 3. Probe and report network TCP Serial Server (if configured)
         const upsCfg = loadUpsConfig();
-        const tcpHost = upsCfg.tcpHost || '192.168.1.8';
+        const tcpHost = upsCfg.tcpHost;
         const tcpPort = parseInt(upsCfg.tcpPort) || 8887;
         let isTcpOnline = false;
-        try {
-            isTcpOnline = await new Promise((resolve) => {
-                const sock = new net.Socket();
-                sock.setTimeout(1200);
-                sock.connect(tcpPort, tcpHost, () => {
-                    sock.destroy();
-                    resolve(true);
+        if (tcpHost) {
+            try {
+                isTcpOnline = await new Promise((resolve) => {
+                    const sock = new net.Socket();
+                    sock.setTimeout(1200);
+                    sock.connect(tcpPort, tcpHost, () => {
+                        sock.destroy();
+                        resolve(true);
+                    });
+                    sock.on('error', () => resolve(false));
+                    sock.on('timeout', () => { sock.destroy(); resolve(false); });
                 });
-                sock.on('error', () => resolve(false));
-                sock.on('timeout', () => { sock.destroy(); resolve(false); });
-            });
-        } catch(e) {
-            isTcpOnline = false;
-        }
+            } catch(e) {
+                isTcpOnline = false;
+            }
 
-        ports.unshift({
-            device: `tcp://${tcpHost}:${tcpPort}`,
-            name: `TCP 串口服务器 (${tcpHost}:${tcpPort})`,
-            type: '网络 TCP 串口透传服务器 (RS-232/485)',
-            isUsb: false,
-            isTcp: true,
-            isOnline: isTcpOnline,
-            description: isTcpOnline ? `🟢 在线连接 (${tcpHost}:${tcpPort})` : `🔴 离线未连接 / 已拔出 (${tcpHost}:${tcpPort})`,
-            isUsed: isTcpOnline,
-            usedBy: isTcpOnline ? 'UPS 监控系统 / RS-232 协议透传运行中' : '🔴 串口服务器已断开 / 连接超时'
-        });
+            ports.unshift({
+                device: `tcp://${tcpHost}:${tcpPort}`,
+                name: `TCP 串口服务器 (${tcpHost}:${tcpPort})`,
+                type: '网络 TCP 串口透传服务器 (RS-232/485)',
+                isUsb: false,
+                isTcp: true,
+                isOnline: isTcpOnline,
+                description: isTcpOnline ? `🟢 在线连接 (${tcpHost}:${tcpPort})` : `🔴 离线未连接 / 已拔出 (${tcpHost}:${tcpPort})`,
+                isUsed: isTcpOnline,
+                usedBy: isTcpOnline ? 'UPS 监控系统 / RS-232 协议透传运行中' : '🔴 串口服务器已断开 / 连接超时'
+            });
+        }
 
         res.json({
             success: true,
@@ -3507,11 +3509,11 @@ function loadUpsConfig() {
                 mode: 'cyberpower_usb',
                 workMode: 'eco',
                 autoEcoRecovery: true,
-                tcpHost: '192.168.1.8',
+                tcpHost: '',
                 tcpPort: 8887,
                 port: '/dev/ttyUSB0',
                 baudRate: 9600,
-                upsName: 'CPS UT650EGC',
+                upsName: 'cyberpower',
                 host: '127.0.0.1',
                 portNum: 3493,
                 lowBatteryPct: 20,
@@ -3528,6 +3530,8 @@ function loadUpsConfig() {
             return defCfg;
         }
         const cfg = JSON.parse(fs.readFileSync(UPS_CONFIG_FILE, 'utf8'));
+        if (!cfg.mode) cfg.mode = 'cyberpower_usb';
+        if (!cfg.upsName || cfg.upsName === 'CPS UT650EGC' || cfg.upsName === 'SANTAK 在线式 UPS') cfg.upsName = 'cyberpower';
         if (!cfg.workMode) cfg.workMode = 'eco';
         if (cfg.autoEcoRecovery === undefined) cfg.autoEcoRecovery = true;
         if (cfg.notifyEnable === undefined) cfg.notifyEnable = true;
@@ -3542,9 +3546,11 @@ function loadUpsConfig() {
             mode: 'cyberpower_usb',
             workMode: 'eco',
             autoEcoRecovery: true,
-            tcpHost: '192.168.1.8',
+            tcpHost: '',
             tcpPort: 8887,
-            upsName: 'CPS UT650EGC',
+            upsName: 'cyberpower',
+            host: '127.0.0.1',
+            portNum: 3493,
             notifyEnable: true,
             notifyWebhookUrl: '',
             notifyOnOutage: true,
@@ -3582,7 +3588,8 @@ let upsSocketPort = null;
 let upsQueryQueue = Promise.resolve();
 let upsConnecting = false;
 
-function getOrCreateUpsSocket(host = '192.168.1.8', port = 8887) {
+function getOrCreateUpsSocket(host, port = 8887) {
+    if (!host) return Promise.reject(new Error('未配置串口服务器主机地址'));
     if (upsPersistentSocket && !upsPersistentSocket.destroyed && upsSocketHost === host && upsSocketPort === port) {
         return Promise.resolve(upsPersistentSocket);
     }
@@ -3625,7 +3632,8 @@ function getOrCreateUpsSocket(host = '192.168.1.8', port = 8887) {
 let lastUpsLiveFrame = '';
 let isUpsQuerying = false;
 
-async function queryUpsTcpServer(host = '192.168.1.8', port = 8887, cmd = 'Q1', timeoutMs = 2500) {
+async function queryUpsTcpServer(host, port = 8887, cmd = 'Q1', timeoutMs = 2500) {
+    if (!host) return '';
     let waitCount = 0;
     while (isUpsQuerying && waitCount < 30) {
         await new Promise(r => setTimeout(r, 60));
@@ -3707,7 +3715,7 @@ async function queryUpsTcpServer(host = '192.168.1.8', port = 8887, cmd = 'Q1', 
 async function fetchNutUpsData(targetName = '', host = '127.0.0.1', port = 3493) {
     try {
         let name = targetName || '';
-        if (!name || name === 'SANTAK 在线式 UPS' || name === 'ups') {
+        if (!name || name === 'SANTAK 在线式 UPS' || name === 'ups' || name === 'CPS UT650EGC') {
             try {
                 const { stdout: listOut } = await execPromise('upsc -l 2>/dev/null');
                 const lines = (listOut || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -3736,10 +3744,52 @@ async function fetchNutUpsData(targetName = '', host = '127.0.0.1', port = 3493)
     }
 }
 
-function buildNutUpsPayload(config, kv, upscRaw = '') {
-    const isOnline = !!(kv['status'] || kv['battery.charge'] || kv['ups.status'] || upscRaw);
+function buildNutUpsPayload(config, kv = {}, upscRaw = '') {
+    const isOnline = !!(kv && (kv['status'] || kv['battery.charge'] || kv['ups.status'] || upscRaw));
     if (!isOnline) {
-        return buildUpsPayload(config, '', false);
+        return {
+            isOnline: false,
+            upsType: 'usb_cyberpower',
+            config,
+            upsName: config.upsName || '硕天 (CyberPower) UT650EGC',
+            vendor: 'CPS (硕天 CyberPower Systems)',
+            model: 'UT650EGC (USB-HID 650VA / 360W)',
+            serial: 'USB-CPS-0764:0501',
+            driver: 'NUT usbhid-ups (CyberPower HID)',
+            driverVersion: '2.8.4',
+            connectionType: '主板直连 USB-HID 通信 (VendorID: 0764 ProductID: 0501) - 🔴 离线未连接',
+            statusRaw: 'OFFLINE',
+            statusText: '⚠️ 未检测到在线 UPS 设备（主板 USB 直连超时或 NUT 驱动未启动）',
+            powerSource: '🔴 离线 / 设备已断开',
+            batteryCharge: 0,
+            battVolt: '0.0 V',
+            busVolt: '0 V DC',
+            loadPct: 0,
+            loadWatts: '0 W',
+            loadVA: '0 VA',
+            runtimeSec: 0,
+            runtimeMin: 0,
+            inputVoltage: '0.0 V',
+            outputVoltage: '0.0 V',
+            bypassVoltage: '0.0 V',
+            frequency: '0.0 Hz',
+            temperature: '0.0 °C',
+            fanRpm: 0,
+            fanPct: 0,
+            fanSpeed: '0 RPM (静音设计)',
+            fanStatus: '无风扇静音散热',
+            ecoMode: '离线',
+            bypassMode: '离线',
+            inverterState: '离线',
+            chargerState: '离线',
+            phaseLockState: '未同步',
+            beeperState: '静音',
+            nutServerActive: 'inactive',
+            nutMonitorActive: 'inactive',
+            apcupsdActive: 'inactive',
+            rawKv: {},
+            rawText: ''
+        };
     }
 
     const rawMfr = kv['ups.mfr'] || kv['device.mfr'] || 'CPS';
@@ -3833,19 +3883,23 @@ function buildNutUpsPayload(config, kv, upscRaw = '') {
 }
 
 async function queryUpsStatusUnified(config) {
-    const mode = config.mode || 'auto';
+    const mode = config.mode || 'cyberpower_usb';
 
-    // 1. Try USB NUT (CyberPower, APC, USB-HID)
-    if (mode === 'auto' || mode === 'cyberpower_usb' || mode === 'usb_hid' || mode === 'nut_service') {
-        const nutRes = await fetchNutUpsData(config.upsName === 'SANTAK 在线式 UPS' ? '' : config.upsName, config.host || '127.0.0.1', config.port || 3493);
+    // 1. Try USB NUT (CyberPower, APC, USB-HID, nut_service)
+    if (mode === 'auto' || mode === 'cyberpower_usb' || mode === 'usb_hid' || mode === 'nut_service' || mode === 'apc_usb') {
+        const nutRes = await fetchNutUpsData(config.upsName, config.host || '127.0.0.1', config.portNum || config.port || 3493);
         if (nutRes && nutRes.kv && (nutRes.kv['battery.charge'] || nutRes.kv['ups.status'])) {
             return buildNutUpsPayload(config, nutRes.kv, nutRes.rawText);
         }
+        // If mode is explicitly USB NUT / Cyberpower / APC, do NOT probe TCP!
+        if (mode !== 'auto') {
+            return buildNutUpsPayload(config, {}, '');
+        }
     }
 
-    // 2. Try TCP Serial Server (Santak Megatec Q1)
-    if (mode === 'auto' || mode === 'serial_tcp' || mode === 'santak_tcp') {
-        const tcpHost = config.tcpHost || '192.168.1.8';
+    // 2. Try TCP Serial Server (Santak Megatec Q1) only if mode is auto or serial_tcp/santak_tcp and tcpHost is set
+    if ((mode === 'auto' || mode === 'serial_tcp' || mode === 'santak_tcp') && config.tcpHost) {
+        const tcpHost = config.tcpHost;
         const tcpPort = parseInt(config.tcpPort) || 8887;
         try {
             const q1 = await queryUpsTcpServer(tcpHost, tcpPort, 'Q1\r\n', 1500);
@@ -3856,6 +3910,9 @@ async function queryUpsStatusUnified(config) {
     }
 
     // 3. Fallback offline payload
+    if (mode === 'cyberpower_usb' || mode === 'usb_hid' || mode === 'nut_service' || mode === 'apc_usb') {
+        return buildNutUpsPayload(config, {}, '');
+    }
     return buildUpsPayload(config, '', false);
 }
 
@@ -3983,23 +4040,25 @@ async function checkUpsWatchdog() {
 setInterval(checkUpsWatchdog, 3000);
 
 function buildUpsPayload(config, rawFrame, isOnline = true) {
-    const tcpHost = config.tcpHost || '192.168.1.8';
+    const tcpHost = config.tcpHost || '';
     const tcpPort = parseInt(config.tcpPort) || 8887;
 
     // Offline / Unplugged Payload
     if (!isOnline || !rawFrame || !rawFrame.includes('(')) {
+        const connDesc = tcpHost ? `串口服务器 (${tcpHost}:${tcpPort}) - 🔴 离线未连接` : '串口服务器 - 🔴 离线未连接';
+        const statusDesc = tcpHost ? `⚠️ 未检测到在线 UPS 设备（主板 USB 或串口服务器 ${tcpHost}:${tcpPort} 连接超时或已断开）` : '⚠️ 未检测到在线 UPS 设备（主板 USB 或网络连接超时或已断开）';
         return {
             isOnline: false,
             config,
             upsName: config.upsName || 'SANTAK 在线式 UPS',
             vendor: 'SANTAK (山特) / 兼容 Megatec 协议',
             model: '在线式双变换 1KVA (24V 电池组)',
-            serial: 'RS232-TCP-SERVER-8887',
-            driver: `Serial Server over TCP (${tcpHost}:${tcpPort})`,
+            serial: 'RS232-TCP-SERVER',
+            driver: tcpHost ? `Serial Server over TCP (${tcpHost}:${tcpPort})` : 'Serial Server over TCP',
             driverVersion: 'Megatec-Q4/Q1 Protocol Driver v2.0',
-            connectionType: `串口服务器 (${tcpHost}:${tcpPort}) - 🔴 离线未连接`,
+            connectionType: connDesc,
             statusRaw: 'OFFLINE',
-            statusText: `⚠️ 未检测到在线 UPS 设备（主板 USB 或串口服务器 ${tcpHost}:${tcpPort} 连接超时或已断开）`,
+            statusText: statusDesc,
             powerSource: '🔴 离线 / 设备已断开',
             batteryCharge: 0,
             battVolt: '0.0 V',
@@ -4292,13 +4351,17 @@ app.post('/api/ups/set-mode', async (req, res) => {
             cmd = 'C\r';
             title = '🌿 已开启 ECO 节能模式';
             detail = '系统工作模式已设定为【ECO 节能模式】。市电正常时优先旁路高效率滤波供电 (预计自耗 ≈ 28W)，市电异常 2~4ms 自动切换电池逆变。';
-            try { await queryUpsTcpServer(config.tcpHost || '192.168.1.8', config.tcpPort || 8887, 'PE\r', 800); } catch(e){}
+            if (config.tcpHost) {
+                try { await queryUpsTcpServer(config.tcpHost, config.tcpPort || 8887, 'PE\r', 800); } catch(e){}
+            }
         }
 
-        // Send control command to serial server
-        try {
-            await queryUpsTcpServer(config.tcpHost || '192.168.1.8', config.tcpPort || 8887, cmd, 1000);
-        } catch(e) {}
+        // Send control command to serial server if configured
+        if (config.tcpHost) {
+            try {
+                await queryUpsTcpServer(config.tcpHost, config.tcpPort || 8887, cmd, 1000);
+            } catch(e) {}
+        }
         
         addUpsEvent('ops', title, detail, 'success');
         lastUpsCache = { data: null, timestamp: 0 };
@@ -4626,24 +4689,27 @@ app.post('/api/ups/autodetect', async (req, res) => {
             }
         } catch(e){}
 
-        // 3. Probe TCP Serial Server at 192.168.1.8:8887
+        // 3. Probe TCP Serial Server (only if configured)
         let foundTcpUps = false;
         let tcpUpsDetail = '';
-        try {
-            const q1 = await queryUpsTcpServer('192.168.1.8', 8887, 'Q1\r\n', 1000);
-            if (q1 && q1.includes('(')) {
-                foundTcpUps = true;
-                tcpUpsDetail = '192.168.1.8:8887 (SANTAK Megatec-Q1 协议)';
-                detected.push({
-                    type: 'santak_tcp',
-                    name: '山特 (SANTAK) 在线式 UPS (TCP 串口服务器)',
-                    vendor: 'SANTAK (山特)',
-                    model: '在线式双变换 1KVA (24V 电池组)',
-                    endpoint: '192.168.1.8:8887',
-                    status: '🟢 串口服务器网络在线'
-                });
-            }
-        } catch(e) {}
+        const currentCfg = loadUpsConfig();
+        if (currentCfg.tcpHost) {
+            try {
+                const q1 = await queryUpsTcpServer(currentCfg.tcpHost, currentCfg.tcpPort || 8887, 'Q1\r\n', 1000);
+                if (q1 && q1.includes('(')) {
+                    foundTcpUps = true;
+                    tcpUpsDetail = `${currentCfg.tcpHost}:${currentCfg.tcpPort || 8887} (SANTAK Megatec-Q1 协议)`;
+                    detected.push({
+                        type: 'santak_tcp',
+                        name: '山特 (SANTAK) 在线式 UPS (TCP 串口服务器)',
+                        vendor: 'SANTAK (山特)',
+                        model: '在线式双变换 1KVA (24V 电池组)',
+                        endpoint: `${currentCfg.tcpHost}:${currentCfg.tcpPort || 8887}`,
+                        status: '🟢 串口服务器网络在线'
+                    });
+                }
+            } catch(e) {}
+        }
 
         let message = '';
         if (foundUsbUps) {
@@ -4651,18 +4717,18 @@ app.post('/api/ups/autodetect', async (req, res) => {
         } else if (foundTcpUps) {
             message = `✅ 成功探测到网络串口服务器 UPS: [${tcpUpsDetail}]`;
         } else {
-            message = '未探测到物理 USB UPS，已就绪支持网络 NUT 与 TCP 串口服务器 (192.168.1.8:8887)';
+            message = '未探测到物理 USB UPS 设备，请确认 USB 数据线已连接或在下方手动配置通信参数。';
         }
 
         res.json({
             success: true,
             foundUsbUps,
             usbDeviceName,
-            detectedMode,
-            detectedUpsName,
+            detectedMode: detectedMode || 'cyberpower_usb',
+            detectedUpsName: detectedUpsName || 'cyberpower',
             foundTcpUps,
-            tcpHost: '192.168.1.8',
-            tcpPort: 8887,
+            tcpHost: currentCfg.tcpHost || '',
+            tcpPort: currentCfg.tcpPort || 8887,
             detected,
             message
         });
