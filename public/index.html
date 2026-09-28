@@ -730,6 +730,99 @@
 
             <!-- ══ TAB 4: 网络管理 ═══════════════════════════════════════════════ -->
             <section id="tab-network" class="tab-panel">
+                <!-- Modals for Network Operations -->
+                <!-- Static Route Modal -->
+                <div class="modal-overlay" id="addRouteModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:480px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-route" style="color:var(--accent-blue); margin-right:8px;"></i>添加静态路由 (Static Route)</h3>
+                            <button class="btn-icon" onclick="document.getElementById('addRouteModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">目标网段 / CIDR (Target)</label>
+                                <input type="text" id="route-target-input" class="form-input mono" placeholder="例如: 10.0.0.0/24 或 192.168.2.0/24" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">下一跳网关 IP (Gateway / Via，可选)</label>
+                                <input type="text" id="route-via-input" class="form-input mono" placeholder="例如: 192.168.1.1 (没有则留空)" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">出接口网卡 (Device / Interface，可选)</label>
+                                <input type="text" id="route-dev-input" class="form-input mono" placeholder="例如: lan1, enp1s0f0 (没有则留空)" style="width:100%; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('addRouteModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" onclick="submitAddRoute()"><i class="fa-solid fa-check"></i> 确认添加</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Port Forward Modal -->
+                <div class="modal-overlay" id="addPortForwardModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:480px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-shuffle" style="color:var(--accent-purple); margin-right:8px;"></i>添加端口映射 (NAT Forward)</h3>
+                            <button class="btn-icon" onclick="document.getElementById('addPortForwardModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="grid-2" style="gap:12px; margin-bottom:14px;">
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">外网暴露端口 (External Port)</label>
+                                    <input type="number" id="pf-ext-port" class="form-input mono" placeholder="例如: 8080" min="1" max="65535" style="width:100%; box-sizing:border-box;">
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">传输协议 (Protocol)</label>
+                                    <select id="pf-proto" class="form-input" style="width:100%;">
+                                        <option value="tcp/udp" selected>TCP + UDP</option>
+                                        <option value="tcp">TCP</option>
+                                        <option value="udp">UDP</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid-2" style="gap:12px;">
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">内网目标 IP (Internal IP)</label>
+                                    <input type="text" id="pf-int-ip" class="form-input mono" placeholder="例如: 192.168.1.100" style="width:100%; box-sizing:border-box;">
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">内网目标端口 (Internal Port)</label>
+                                    <input type="number" id="pf-int-port" class="form-input mono" placeholder="例如: 80" min="1" max="65535" style="width:100%; box-sizing:border-box;">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('addPortForwardModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" onclick="submitAddPortForward()"><i class="fa-solid fa-plus"></i> 添加映射</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VPN Peer Modal -->
+                <div class="modal-overlay" id="addVpnPeerModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:480px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-shield-halved" style="color:var(--accent-green); margin-right:8px;"></i>添加 WireGuard 客户端 (VPN Peer)</h3>
+                            <button class="btn-icon" onclick="document.getElementById('addVpnPeerModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">客户端备注名称 (Peer Name)</label>
+                                <input type="text" id="vpn-peer-name" class="form-input" placeholder="例如: iPhone / MacBook / WorkPC" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">分配虚拟 IP (Assigned IP)</label>
+                                <input type="text" id="vpn-peer-ip" class="form-input mono" placeholder="例如: 10.8.0.2" style="width:100%; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('addVpnPeerModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" onclick="submitAddVpnPeer()"><i class="fa-solid fa-plus"></i> 生成客户端</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 1. 网络工作模式自主切换面板 (Network Mode Topology Card) -->
                 <div class="card mb-20" style="border-left: 4px solid var(--accent-blue);">
                     <div class="card-header-bar" style="margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
@@ -1187,6 +1280,50 @@
                     </div>
                 </div>
 
+                <!-- SMB Share Add Modal -->
+                <div class="modal-overlay" id="smbShareModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:480px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-folder-plus" style="color:var(--accent-blue); margin-right:8px;"></i>添加 SMB 局域网共享目录</h3>
+                            <button class="btn-icon" onclick="document.getElementById('smbShareModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">共享目录名称 (Share Name)</label>
+                                <input type="text" id="smb-share-name" class="form-input" placeholder="例如: Data / Media / Public" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">服务器绝对路径 (Local Path)</label>
+                                <input type="text" id="smb-share-path" class="form-input mono" placeholder="例如: /mnt/md127 或 /data/share" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="grid-2" style="gap:12px; margin-bottom:14px;">
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">访客匿名访问 (Guest Ok)</label>
+                                    <select id="smb-share-guest" class="form-input" style="width:100%;">
+                                        <option value="true" selected>允许 (免密访问)</option>
+                                        <option value="false">禁止 (需账号密码)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">权限策略 (Access Mode)</label>
+                                    <select id="smb-share-ro" class="form-input" style="width:100%;">
+                                        <option value="false" selected>读写 (Read/Write)</option>
+                                        <option value="true">只读 (Read Only)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">备注说明 (Comment)</label>
+                                <input type="text" id="smb-share-comment" class="form-input" placeholder="例如: 影音影视媒体库" style="width:100%; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('smbShareModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" onclick="submitSmbShare()"><i class="fa-solid fa-plus"></i> 创建共享</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Summary KPI Row -->
                 <div class="grid-4 mb-20">
                     <div class="card stat-card">
@@ -1317,6 +1454,110 @@
 
             <!-- ══ TAB 7: 防火墙管理 ═════════════════════════════════════════════ -->
             <section id="tab-firewall" class="tab-panel">
+                <!-- Modals for Firewall Operations -->
+                <!-- Port Rule Modal -->
+                <div class="modal-overlay" id="fwAddPortModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:520px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-door-open" style="color:var(--accent-green); margin-right:8px;"></i>放行 / 限制端口规则</h3>
+                            <button class="btn-icon" onclick="document.getElementById('fwAddPortModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="grid-2" style="gap:12px; margin-bottom:14px;">
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">端口号 (Port)</label>
+                                    <input type="number" id="fw-port" class="form-input mono" placeholder="如: 8080" min="1" max="65535" style="width:100%; box-sizing:border-box;">
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">传输协议 (Protocol)</label>
+                                    <select id="fw-proto" class="form-input" style="width:100%;">
+                                        <option value="tcp">TCP</option>
+                                        <option value="udp">UDP</option>
+                                        <option value="any">TCP + UDP (全部)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid-2" style="gap:12px; margin-bottom:14px;">
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">动作 (Action)</label>
+                                    <select id="fw-action" class="form-input" style="width:100%;">
+                                        <option value="allow">ALLOW (放行)</option>
+                                        <option value="deny">DENY (拒绝)</option>
+                                        <option value="reject">REJECT (重置)</option>
+                                        <option value="limit">LIMIT (限速)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">流量方向 (Direction)</label>
+                                    <select id="fw-direction" class="form-input" style="width:100%;">
+                                        <option value="in">入站 (Inbound)</option>
+                                        <option value="out">出站 (Outbound)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Common Port Chips -->
+                            <div style="margin-top:10px; background:rgba(0,0,0,0.15); padding:10px; border-radius:8px; border:1px solid var(--border-color);">
+                                <span class="chip-label" style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:8px;">💡 常用端口快捷填入:</span>
+                                <div class="quick-chips-bar" style="display:flex; flex-wrap:wrap; gap:6px;">
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(22,'tcp')">SSH 22</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(80,'tcp')">HTTP 80</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(443,'tcp')">HTTPS 443</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(3306,'tcp')">MySQL 3306</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(6379,'tcp')">Redis 6379</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(5432,'tcp')">PgSQL 5432</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(8080,'tcp')">8080</button>
+                                    <button type="button" class="chip-btn chip-green" onclick="quickAllowPort(9000,'tcp')">Portainer 9000</button>
+                                </div>
+                            </div>
+                            <pre class="terminal-box" id="fw-add-result" style="display:none;height:60px;margin-top:14px;"></pre>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('fwAddPortModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" id="btn-fw-add-port"><i class="fa-solid fa-check"></i> 应用规则</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IP-based Rule Modal -->
+                <div class="modal-overlay" id="fwAddIpModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:500px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-globe" style="color:var(--accent-blue); margin-right:8px;"></i>添加基于 IP / 子网的规则</h3>
+                            <button class="btn-icon" onclick="document.getElementById('fwAddIpModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">来源 IP / CIDR 子网</label>
+                                <input type="text" id="fw-from-ip" class="form-input mono" placeholder="如: 192.168.1.0/24 或 10.0.0.1" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="grid-3" style="gap:12px; margin-bottom:14px;">
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">目标端口 (可选)</label>
+                                    <input type="number" id="fw-to-port" class="form-input mono" placeholder="留空=全部" style="width:100%; box-sizing:border-box;">
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">协议</label>
+                                    <select id="fw-ip-proto" class="form-input" style="width:100%;">
+                                        <option value="tcp">TCP</option>
+                                        <option value="udp">UDP</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">动作</label>
+                                    <select id="fw-ip-action" class="form-input" style="width:100%;">
+                                        <option value="allow">ALLOW (放行)</option>
+                                        <option value="deny">DENY (拒绝)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('fwAddIpModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" id="btn-fw-add-ip"><i class="fa-solid fa-plus"></i> 添加 IP 规则</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Status Banner -->
                 <div id="fw-status-banner" class="health-banner mb-20" style="--health-ok-bg:rgba(59,130,246,0.08);--health-ok-border:rgba(59,130,246,0.3);color:#3b82f6;">
                     <span class="fw-status-dot" id="fw-dot"></span>
@@ -1328,96 +1569,20 @@
                     </div>
                 </div>
 
-                <!-- Quick Add Port Rule -->
-                <div class="card mb-20">
-                    <div class="card-header-bar"><h3>🚪 快速放行端口</h3></div>
-                    <div class="fw-quick-form">
-                        <div class="fw-field">
-                            <label>端口号</label>
-                            <input type="number" id="fw-port" class="form-input" placeholder="如: 8080" min="1" max="65535">
-                        </div>
-                        <div class="fw-field">
-                            <label>协议</label>
-                            <select id="fw-proto" class="form-input">
-                                <option value="tcp">TCP</option>
-                                <option value="udp">UDP</option>
-                                <option value="any">TCP + UDP</option>
-                            </select>
-                        </div>
-                        <div class="fw-field">
-                            <label>动作</label>
-                            <select id="fw-action" class="form-input">
-                                <option value="allow">ALLOW (放行)</option>
-                                <option value="deny">DENY (拒绝)</option>
-                                <option value="reject">REJECT (重置)</option>
-                                <option value="limit">LIMIT (限速)</option>
-                            </select>
-                        </div>
-                        <div class="fw-field">
-                            <label>方向</label>
-                            <select id="fw-direction" class="form-input">
-                                <option value="in">入站 (Inbound)</option>
-                                <option value="out">出站 (Outbound)</option>
-                            </select>
-                        </div>
-                        <div class="fw-field fw-field-btn">
-                            <label>&nbsp;</label>
-                            <button class="btn btn-primary" id="btn-fw-add-port">✅ 添加规则</button>
-                        </div>
-                    </div>
-                    <!-- Common Port Chips -->
-                    <div class="quick-chips-bar" style="margin-top:14px;">
-                        <span class="chip-label">常用端口快捷放行:</span>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(22,'tcp')">SSH 22</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(80,'tcp')">HTTP 80</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(443,'tcp')">HTTPS 443</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(3306,'tcp')">MySQL 3306</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(6379,'tcp')">Redis 6379</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(5432,'tcp')">PgSQL 5432</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(8080,'tcp')">HTTP-Alt 8080</button>
-                        <button class="chip-btn chip-green" onclick="quickAllowPort(9000,'tcp')">Portainer 9000</button>
-                    </div>
-                    <pre class="terminal-box" id="fw-add-result" style="display:none;height:80px;margin-top:14px;"></pre>
-                </div>
-
-                <!-- IP-based Rule -->
-                <div class="card mb-20">
-                    <div class="card-header-bar"><h3>🌐 基于 IP 的规则 (ufw allow/deny from IP)</h3></div>
-                    <div class="fw-quick-form">
-                        <div class="fw-field" style="flex:2;">
-                            <label>来源 IP / 子网 (CIDR)</label>
-                            <input type="text" id="fw-from-ip" class="form-input" placeholder="如: 192.168.1.0/24 或 10.0.0.1">
-                        </div>
-                        <div class="fw-field">
-                            <label>目标端口 (可选)</label>
-                            <input type="number" id="fw-to-port" class="form-input" placeholder="留空=全部">
-                        </div>
-                        <div class="fw-field">
-                            <label>协议</label>
-                            <select id="fw-ip-proto" class="form-input">
-                                <option value="tcp">TCP</option>
-                                <option value="udp">UDP</option>
-                            </select>
-                        </div>
-                        <div class="fw-field">
-                            <label>动作</label>
-                            <select id="fw-ip-action" class="form-input">
-                                <option value="allow">ALLOW</option>
-                                <option value="deny">DENY</option>
-                            </select>
-                        </div>
-                        <div class="fw-field fw-field-btn">
-                            <label>&nbsp;</label>
-                            <button class="btn btn-primary" id="btn-fw-add-ip">添加 IP 规则</button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Rules Table -->
                 <div class="card">
                     <div class="card-header-bar">
-                        <h3>📋 当前防火墙规则列表</h3>
-                        <button class="btn btn-secondary btn-sm" id="btn-fw-refresh">刷新规则</button>
+                        <div>
+                            <h3 style="margin:0; font-size:16px; display:flex; align-items:center; gap:8px;">
+                                <i class="fa-solid fa-shield-halved" style="color:var(--accent-blue);"></i>
+                                📋 当前防火墙规则列表
+                            </h3>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-primary btn-sm" onclick="showFwAddPortModal()"><i class="fa-solid fa-plus"></i> 放行端口</button>
+                            <button class="btn btn-secondary btn-sm" onclick="showFwAddIpModal()"><i class="fa-solid fa-plus"></i> IP / 子网规则</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-fw-refresh"><i class="fa-solid fa-rotate-right"></i> 刷新</button>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="data-table">
@@ -1824,40 +1989,76 @@
 
             <!-- ══ TAB 10: Web 用户管理 ═════════════════════════════════════════ -->
             <section id="tab-users" class="tab-panel">
-                <!-- Add User Form -->
-                <div class="card mb-20">
-                    <div class="card-header-bar">
-                        <h3>👥 新增 Web 管理账号</h3>
+                <!-- Modals for User Operations -->
+                <!-- Add User Modal -->
+                <div class="modal-overlay" id="addUserModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:480px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-user-plus" style="color:var(--accent-blue); margin-right:8px;"></i>新增 Web 管理账号</h3>
+                            <button class="btn-icon" onclick="document.getElementById('addUserModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">Web 登录用户名</label>
+                                <input type="text" id="web-user-name" class="form-input" placeholder="输入用户名" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">访问密码</label>
+                                <input type="password" id="web-user-pass" class="form-input" placeholder="设置访问密码" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">用户权限角色</label>
+                                <select id="web-user-role" class="form-input" style="width:100%;">
+                                    <option value="Administrator">Administrator (系统管理员 - 全部权限)</option>
+                                    <option value="Operator">Operator (操作员 - 仅监控与受限控制)</option>
+                                </select>
+                            </div>
+                            <pre class="terminal-box" id="web-user-add-result" style="display:none;height:60px;margin-top:14px;"></pre>
+                        </div>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('addUserModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" id="btn-add-web-user"><i class="fa-solid fa-check"></i> 创建账号</button>
+                        </div>
                     </div>
-                    <div class="fw-quick-form" style="gap:16px;">
-                        <div class="fw-field" style="flex:1;">
-                            <label>Web 用户名</label>
-                            <input type="text" id="web-user-name" class="form-input" placeholder="输入用户名">
+                </div>
+
+                <!-- Update User Password Modal -->
+                <div class="modal-overlay" id="updateUserPasswordModal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="width:440px;">
+                        <div class="modal-header">
+                            <h3><i class="fa-solid fa-key" style="color:var(--accent-orange); margin-right:8px;"></i>修改用户密码</h3>
+                            <button class="btn-icon" onclick="document.getElementById('updateUserPasswordModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
                         </div>
-                        <div class="fw-field" style="flex:1;">
-                            <label>密码</label>
-                            <input type="password" id="web-user-pass" class="form-input" placeholder="设置访问密码">
+                        <div class="modal-body" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">目标账号</label>
+                                <input type="text" id="update-pass-username" class="form-input mono" readonly style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.2); opacity:0.8;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">新密码</label>
+                                <input type="password" id="update-pass-new" class="form-input" placeholder="输入新密码" style="width:100%; box-sizing:border-box;">
+                            </div>
                         </div>
-                        <div class="fw-field" style="flex:1;">
-                            <label>用户角色</label>
-                            <select id="web-user-role" class="form-input">
-                                <option value="Administrator">Administrator (管理员)</option>
-                                <option value="Operator">Operator (操作员)</option>
-                            </select>
-                        </div>
-                        <div class="fw-field fw-field-btn">
-                            <label>&nbsp;</label>
-                            <button class="btn btn-primary" id="btn-add-web-user">➕ 添加账号</button>
+                        <div class="modal-footer" style="padding:20px; text-align:right;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('updateUserPasswordModal').style.display='none'">取消</button>
+                            <button class="btn btn-primary" onclick="submitUpdateUserPassword()"><i class="fa-solid fa-floppy-disk"></i> 保存新密码</button>
                         </div>
                     </div>
-                    <pre class="terminal-box" id="web-user-add-result" style="display:none;height:60px;margin-top:14px;"></pre>
                 </div>
 
                 <!-- User List Table -->
                 <div class="card">
                     <div class="card-header-bar">
-                        <h3>📋 Web 访问用户列表</h3>
-                        <button class="btn btn-secondary btn-sm" id="btn-refresh-web-users">刷新用户列表</button>
+                        <div>
+                            <h3 style="margin:0; font-size:16px; display:flex; align-items:center; gap:8px;">
+                                <i class="fa-solid fa-users" style="color:var(--accent-purple);"></i>
+                                📋 Web 访问用户列表
+                            </h3>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-primary btn-sm" onclick="showAddUserModal()"><i class="fa-solid fa-user-plus"></i> 新增账号</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-refresh-web-users"><i class="fa-solid fa-rotate-right"></i> 刷新</button>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="data-table">

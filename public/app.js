@@ -42,9 +42,31 @@ document.addEventListener('DOMContentLoaded', () => {
     bindTopologyCanvasEvents();
     bindSerialControls();
     bindWebUserControls();
+    bindModalDismissEvents();
 
     checkSession();
 });
+
+function bindModalDismissEvents() {
+    // Click on backdrop / overlay outside modal-box to close
+    document.addEventListener('click', (e) => {
+        if (e.target && (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-backdrop'))) {
+            e.target.style.display = 'none';
+            e.target.classList.remove('show');
+        }
+    });
+    // Escape key closes open modals
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay, .modal-backdrop').forEach(modal => {
+                if (modal.style.display === 'flex' || modal.classList.contains('show')) {
+                    modal.style.display = 'none';
+                    modal.classList.remove('show');
+                }
+            });
+        }
+    });
+}
 
 async function checkSession() {
     try {
@@ -1278,17 +1300,29 @@ async function fetchRoutes() {
     } catch(e) { tbody.innerHTML = `<tr><td colspan="4" class="text-center text-red">加载失败: ${e.message}</td></tr>`; }
 }
 
-async function showAddRouteModal() {
-    const target = prompt('请输入目标网段 (如 10.0.0.0/24)');
-    if(!target) return;
-    const via = prompt('请输入下一跳网关IP (如 192.168.1.1，没有则留空)');
-    const dev = prompt('请输入出接口 (如 enp1s0，没有则留空)');
-    if(!via && !dev) return alert('必须指定下一跳或出接口');
+function showAddRouteModal() {
+    document.getElementById('route-target-input').value = '';
+    document.getElementById('route-via-input').value = '';
+    document.getElementById('route-dev-input').value = '';
+    document.getElementById('addRouteModal').style.display = 'flex';
+}
+
+async function submitAddRoute() {
+    const target = document.getElementById('route-target-input').value.trim();
+    const via    = document.getElementById('route-via-input').value.trim();
+    const dev    = document.getElementById('route-dev-input').value.trim();
+    if (!target) return alert('请输入目标网段 (例如: 10.0.0.0/24)');
+    if (!via && !dev) return alert('必须指定下一跳网关或出接口');
+    document.getElementById('addRouteModal').style.display = 'none';
     try {
         const res = await apiFetch('/api/network/route', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target, via, dev}) });
         const json = await res.json();
-        if(json.success) fetchRoutes(); else alert(json.error);
-    } catch(e) { alert(e.message); }
+        if(json.success) {
+            fetchRoutes();
+        } else {
+            alert('添加路由失败: ' + json.error);
+        }
+    } catch(e) { alert('请求异常: ' + e.message); }
 }
 
 async function deleteRoute(target, via, dev) {
@@ -1324,14 +1358,21 @@ function renderNatRules() {
     </tr>`).join('') || '<tr><td colspan="5" class="text-center">暂无映射规则</td></tr>';
 }
 
-async function showAddPortForwardModal() {
-    const extPort = prompt('请输入外网端口 (如 8080)');
-    if(!extPort) return;
-    const proto = prompt('协议 (tcp / udp / tcp/udp)', 'tcp/udp');
-    const intIp = prompt('内网目标 IP (如 192.168.1.100)');
-    const intPort = prompt('内网目标端口 (如 80)');
-    if(!intIp || !intPort) return alert('缺少必填项');
+function showAddPortForwardModal() {
+    document.getElementById('pf-ext-port').value = '';
+    document.getElementById('pf-int-ip').value = '';
+    document.getElementById('pf-int-port').value = '';
+    document.getElementById('addPortForwardModal').style.display = 'flex';
+}
+
+function submitAddPortForward() {
+    const extPort = document.getElementById('pf-ext-port').value.trim();
+    const proto   = document.getElementById('pf-proto').value;
+    const intIp   = document.getElementById('pf-int-ip').value.trim();
+    const intPort = document.getElementById('pf-int-port').value.trim();
+    if(!extPort || !intIp || !intPort) return alert('请完整填写外网端口、目标 IP 及目标端口');
     currentNatRules.push({ extPort, proto, intIp, intPort });
+    document.getElementById('addPortForwardModal').style.display = 'none';
     renderNatRules();
 }
 
@@ -1387,7 +1428,6 @@ async function vpnAction(action, name=null, clientIp=null) {
         const json = await res.json();
         
         if (json.success && json.clientConf) {
-            // Show config to user
             const confStr = json.clientConf;
             const w = window.open('','_blank');
             w.document.write(`<h2>客户端配置生成成功！请保存此文本：</h2><pre style="background:#f1f5f9;padding:20px;border-radius:8px;">${confStr}</pre>`);
@@ -1398,11 +1438,17 @@ async function vpnAction(action, name=null, clientIp=null) {
     } catch(e) { alert(e.message); }
 }
 
-async function showAddVpnPeerModal() {
-    const name = prompt('请输入客户端备注名 (例如 iPhone)');
-    if(!name) return;
-    const clientIp = prompt('请输入要分配的客户端虚拟 IP (例如 10.8.0.2，请确保不重复)');
-    if(!clientIp) return;
+function showAddVpnPeerModal() {
+    document.getElementById('vpn-peer-name').value = '';
+    document.getElementById('vpn-peer-ip').value = '';
+    document.getElementById('addVpnPeerModal').style.display = 'flex';
+}
+
+async function submitAddVpnPeer() {
+    const name = document.getElementById('vpn-peer-name').value.trim();
+    const clientIp = document.getElementById('vpn-peer-ip').value.trim();
+    if(!name || !clientIp) return alert('请输入客户端名称和分配 IP');
+    document.getElementById('addVpnPeerModal').style.display = 'none';
     await vpnAction('add_peer', name, clientIp);
 }
 
@@ -1606,6 +1652,19 @@ async function fwReset() {
     } catch (e) { alert('请求失败: ' + e.message); }
 }
 
+function showFwAddPortModal() {
+    document.getElementById('fw-port').value = '';
+    const resBox = document.getElementById('fw-add-result');
+    if (resBox) resBox.style.display = 'none';
+    document.getElementById('fwAddPortModal').style.display = 'flex';
+}
+
+function showFwAddIpModal() {
+    document.getElementById('fw-from-ip').value = '';
+    document.getElementById('fw-to-port').value = '';
+    document.getElementById('fwAddIpModal').style.display = 'flex';
+}
+
 async function fwAddPortRule() {
     const port      = document.getElementById('fw-port').value.trim();
     const protocol  = document.getElementById('fw-proto').value;
@@ -1616,7 +1675,14 @@ async function fwAddPortRule() {
         const res  = await apiFetch('/api/firewall/rule/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ port, protocol, action, direction }) });
         const json = await res.json();
         showFwResult(json.success ? `✅ 规则已添加\n${json.output}` : '❌ ' + json.error, json.success);
-        if (json.success) { document.getElementById('fw-port').value = ''; fetchFirewallStatus(); }
+        if (json.success) {
+            document.getElementById('fw-port').value = '';
+            setTimeout(() => {
+                const modal = document.getElementById('fwAddPortModal');
+                if (modal) modal.style.display = 'none';
+            }, 600);
+            fetchFirewallStatus();
+        }
     } catch (e) { alert('请求失败: ' + e.message); }
 }
 
@@ -1629,8 +1695,14 @@ async function fwAddIpRule() {
     try {
         const res  = await apiFetch('/api/firewall/rule/add-ip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromIp, toPort, protocol, action }) });
         const json = await res.json();
-        showFwResult(json.success ? `✅ IP 规则已添加\n${json.output}` : '❌ ' + json.error, json.success);
-        if (json.success) { document.getElementById('fw-from-ip').value = ''; fetchFirewallStatus(); }
+        if (json.success) {
+            alert(`✅ IP 规则已添加\n${json.output}`);
+            document.getElementById('fw-from-ip').value = '';
+            document.getElementById('fwAddIpModal').style.display = 'none';
+            fetchFirewallStatus();
+        } else {
+            alert('❌ ' + json.error);
+        }
     } catch (e) { alert('请求失败: ' + e.message); }
 }
 
@@ -1645,15 +1717,17 @@ async function fwDeleteRule(num) {
 }
 
 function quickAllowPort(port, proto) {
-    document.getElementById('fw-port').value     = port;
-    document.getElementById('fw-proto').value    = proto;
-    document.getElementById('fw-action').value   = 'allow';
+    document.getElementById('fw-port').value      = port;
+    document.getElementById('fw-proto').value     = proto;
+    document.getElementById('fw-action').value    = 'allow';
     document.getElementById('fw-direction').value = 'in';
+    showFwAddPortModal();
     fwAddPortRule();
 }
 
 function showFwResult(msg, success) {
     const el = document.getElementById('fw-add-result');
+    if (!el) return;
     el.style.display = 'block';
     el.textContent   = msg;
     el.style.borderColor = success ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)';
@@ -2100,6 +2174,14 @@ async function fetchWebUsers() {
     }
 }
 
+function showAddUserModal() {
+    document.getElementById('web-user-name').value = '';
+    document.getElementById('web-user-pass').value = '';
+    const resBox = document.getElementById('web-user-add-result');
+    if (resBox) resBox.style.display = 'none';
+    document.getElementById('addUserModal').style.display = 'flex';
+}
+
 async function addWebUser() {
     const username = document.getElementById('web-user-name').value.trim();
     const password = document.getElementById('web-user-pass').value.trim();
@@ -2115,35 +2197,51 @@ async function addWebUser() {
             body: JSON.stringify({ username, password, role })
         });
         const json = await res.json();
-        resBox.style.display = 'block';
         if (json.success) {
-            resBox.style.color = '#10b981';
-            resBox.textContent = `✅ ${json.message}`;
+            alert(`✅ ${json.message}`);
             document.getElementById('web-user-name').value = '';
             document.getElementById('web-user-pass').value = '';
+            document.getElementById('addUserModal').style.display = 'none';
             fetchWebUsers();
         } else {
-            resBox.style.color = '#ef4444';
-            resBox.textContent = `❌ ${json.error}`;
+            if (resBox) {
+                resBox.style.display = 'block';
+                resBox.style.color = '#ef4444';
+                resBox.textContent = `❌ ${json.error}`;
+            } else {
+                alert('❌ ' + json.error);
+            }
         }
     } catch (e) {
         alert('请求失败: ' + e.message);
     }
 }
 
-async function updateWebUserPrompt(username) {
-    const newPassword = prompt(`请输入用户 [${username}] 的新密码:`);
-    if (!newPassword || !newPassword.trim()) return;
+function updateWebUserPrompt(username) {
+    document.getElementById('update-pass-username').value = username;
+    document.getElementById('update-pass-new').value = '';
+    document.getElementById('updateUserPasswordModal').style.display = 'flex';
+}
+
+async function submitUpdateUserPassword() {
+    const username    = document.getElementById('update-pass-username').value;
+    const newPassword = document.getElementById('update-pass-new').value.trim();
+    if (!newPassword) return alert('请输入新密码');
 
     try {
         const res = await apiFetch('/api/web/users/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, newPassword: newPassword.trim() })
+            body: JSON.stringify({ username, newPassword })
         });
         const json = await res.json();
-        alert(json.message || json.error);
-        fetchWebUsers();
+        if (json.success) {
+            alert(`✅ ${json.message || '密码修改成功'}`);
+            document.getElementById('updateUserPasswordModal').style.display = 'none';
+            fetchWebUsers();
+        } else {
+            alert('❌ ' + (json.error || '修改失败'));
+        }
     } catch (e) {
         alert('修改失败: ' + e.message);
     }
@@ -3049,23 +3147,34 @@ async function toggleService(service, enable) {
     }
 }
 
-async function addSmbShare() {
-    const name = prompt('请输入共享名称 (例如: Data)');
-    if (!name) return;
-    const path = prompt('请输入本地绝对路径 (例如: /mnt/md127)');
-    if (!path) return;
+function addSmbShare() {
+    document.getElementById('smb-share-name').value = '';
+    document.getElementById('smb-share-path').value = '';
+    document.getElementById('smb-share-comment').value = '';
+    document.getElementById('smbShareModal').style.display = 'flex';
+}
+
+async function submitSmbShare() {
+    const name     = document.getElementById('smb-share-name').value.trim();
+    const path     = document.getElementById('smb-share-path').value.trim();
+    const guest_ok = document.getElementById('smb-share-guest').value === 'true';
+    const read_only= document.getElementById('smb-share-ro').value === 'true';
+    const comment  = document.getElementById('smb-share-comment').value.trim();
+
+    if (!name || !path) return alert('请输入共享名称和服务器本地绝对路径');
     
+    document.getElementById('smbShareModal').style.display = 'none';
     try {
         const res = await apiFetch('/api/sharing/smb/share', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name, path, guest_ok: true, read_only: false, comment: '' })
+            body: JSON.stringify({ name, path, guest_ok, read_only, comment })
         });
         const data = await res.json();
         if (data.success) {
             fetchSharingStatus();
         } else {
-            alert('失败: ' + data.error);
+            alert('创建共享失败: ' + data.error);
         }
     } catch (e) {
         alert('错误: ' + e.message);

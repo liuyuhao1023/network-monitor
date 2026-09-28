@@ -926,20 +926,25 @@ body {
 .btn-logs    { background: rgba(59,130,246,0.12); color: var(--accent-blue); border: 1px solid rgba(59,130,246,0.3); }
 
 /* ── Modal ──────────────────────────────────────────────────────────────── */
-.modal-backdrop {
+.modal-backdrop,
+.modal-overlay {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.65);
+    background: rgba(0,0,0,0.68);
     backdrop-filter: blur(8px);
-    z-index: 100;
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10000;
     align-items: center;
     justify-content: center;
+    padding: 20px;
 }
 
-.modal-backdrop.show { display: flex; }
+.modal-backdrop.show,
+.modal-overlay.show { display: flex; }
 
-.modal-card {
+.modal-card,
+.modal-box {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -948,7 +953,9 @@ body {
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    animation: modalIn 0.22s ease;
+    animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
 }
 
 .modal-lg { width: 720px; }
