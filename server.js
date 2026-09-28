@@ -3300,9 +3300,85 @@ app.get('/api/system/raids', async (req, res) => {
                     }
                 }
 
-                // Determine accurate health status
+                // Determine accurate health status & sync progress
+                let syncInfo = null;
+                const mdstatSectionRegex = new RegExp(`^${name}\\s*:[\\s\\S]*?(?=\\n\\S|\\Z)`, 'm');
+                const mdstatMatch = mdstat.match(mdstatSectionRegex);
+                if (mdstatMatch) {
+                    const sec = mdstatMatch[0];
+                    // Match line like: recovery = 18.5% (542074816/2930134016) finish=182.4min speed=218204K/sec
+                    const sm = sec.match(/(\w+)\s*=\s*([0-9\.]+)%\s*(?:\((.*?)\))?\s*(?:finish=([0-9\.]+\w+))?\s*(?:speed=([0-9\.]+\w+))?/);
+                    if (sm) {
+                        const action = sm[1];
+                        let actionText = '同步重建 (Rebuilding)';
+                        if (action === 'resync') actionText = '数据同步 (Resyncing)';
+                        else if (action === 'recovery') actionText = '数据恢复重建 (Recovering)';
+                        else if (action === 'check') actionText = '一致性校验 (Checking)';
+                        else if (action === 'reshape') actionText = '阵列变形重构 (Reshaping)';
+
+                        let speedStr = sm[5] || '';
+                        const speedNum = parseFloat(speedStr);
+                        if (!isNaN(speedNum)) {
+                            if (speedStr.includes('K') || speedNum > 1024) {
+                                speedStr = `${(speedNum / 1024).toFixed(1)} MB/s`;
+                            } else {
+                                speedStr = `${speedNum.toFixed(0)} KB/s`;
+                            }
+                        }
+
+                        let finishStr = sm[4] || '';
+                        if (finishStr.endsWith('min')) {
+                            const minVal = parseFloat(finishStr);
+                            if (minVal >= 60) {
+                                const hrs = (minVal / 60).toFixed(1);
+                                finishStr = `约 ${hrs} 小时 (${minVal.toFixed(0)} 分钟)`;
+                            } else {
+                                finishStr = `约 ${minVal.toFixed(1)} 分钟`;
+                            }
+                        }
+
+                        syncInfo = {
+                            isSyncing: true,
+                            action: action,
+                            actionText: actionText,
+                            percent: parseFloat(sm[2]),
+                            blocks: sm[3] || '',
+                            finish: finishStr,
+                            speed: speedStr
+                        };
+                    }
+                }
+
+                // Fallback check in mdadm -D detail output
+                if (!syncInfo) {
+                    for (let dLine of detail.split('\n')) {
+                        dLine = dLine.trim();
+                        if (dLine.includes('Rebuild Status :') || dLine.includes('Resync Status :') || dLine.includes('Check Status :')) {
+                            const pMatch = dLine.match(/([0-9\.]+)%\s*complete/i);
+                            if (pMatch) {
+                                let actionText = dLine.includes('Rebuild') ? '数据恢复重建 (Recovering)' : (dLine.includes('Check') ? '一致性校验 (Checking)' : '数据同步 (Resyncing)');
+                                syncInfo = {
+                                    isSyncing: true,
+                                    action: 'rebuild',
+                                    actionText: actionText,
+                                    percent: parseFloat(pMatch[1]),
+                                    blocks: '',
+                                    finish: '',
+                                    speed: ''
+                                };
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                raidInfo.sync = syncInfo;
+
                 const st = (raidInfo.state || '').toLowerCase();
-                if (st.includes('failed') || st.includes('broken') || st.includes('inactive')) {
+                if (syncInfo) {
+                    raidInfo.status = 'rebuilding';
+                    raidInfo.statusText = `${syncInfo.actionText} ${syncInfo.percent}%`;
+                } else if (st.includes('failed') || st.includes('broken') || st.includes('inactive')) {
                     raidInfo.status = 'failed';
                     raidInfo.statusText = '已损毁 (Failed)';
                 } else if (st.includes('degraded') || (raidInfo.raidDevices > 0 && raidInfo.activeDevices < raidInfo.raidDevices)) {

@@ -1299,6 +1299,47 @@ code {
     cursor: pointer;
 }
 
+/* ── RAID Rebuild & Sync Progress Bar ────────────────────────────────────────── */
+.raid-sync-progress-box {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+
+.raid-sync-bar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+    width: 100%;
+    position: relative;
+    margin-bottom: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.raid-sync-bar-fill {
+    background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);
+    background-size: 200% 100%;
+    animation: gradientFlow 2s linear infinite;
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+}
+
+@keyframes gradientFlow {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+@keyframes pulseDot {
+    0% { transform: scale(0.95); opacity: 0.7; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+    70% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+    100% { transform: scale(0.95); opacity: 0.7; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
 /* ── UPS Subnav Styling (FnOS / DSM style) ─────────────────────────────── */
 .ups-subnav-btn {
     display: flex;

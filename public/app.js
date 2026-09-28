@@ -2750,6 +2750,30 @@ async function fetchRaids() {
                 `;
             }
 
+            // Rebuild / Sync live progress bar box
+            let syncProgressHtml = '';
+            if (r.sync && r.sync.isSyncing) {
+                syncProgressHtml = `
+                    <div class="raid-sync-progress-box">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span class="pulse-indicator" style="width:10px; height:10px; border-radius:50%; background:#3b82f6; display:inline-block; animation: pulseDot 1.5s infinite;"></span>
+                                <strong style="color:var(--accent-blue); font-size:13px;">${r.sync.actionText || '数据镜像重建同步中'}</strong>
+                            </div>
+                            <span style="font-size:14px; font-weight:700; color:var(--accent-blue); font-family:var(--font-mono, monospace);">${r.sync.percent}%</span>
+                        </div>
+                        <div class="raid-sync-bar-track">
+                            <div class="raid-sync-bar-fill" style="width: ${r.sync.percent}%;"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-secondary); flex-wrap:wrap; gap:8px;">
+                            ${r.sync.speed ? `<span><i class="fa-solid fa-gauge-high" style="color:var(--accent-blue);"></i> 同步速率: <strong style="color:var(--text-primary); font-family:monospace;">${r.sync.speed}</strong></span>` : ''}
+                            ${r.sync.finish ? `<span><i class="fa-solid fa-hourglass-half" style="color:var(--accent-orange);"></i> 预计剩余: <strong style="color:var(--accent-orange); font-family:monospace;">${r.sync.finish}</strong></span>` : ''}
+                            ${r.sync.blocks ? `<span><i class="fa-solid fa-database"></i> 扇区进度: <strong style="font-family:monospace;">${r.sync.blocks}</strong></span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
             // Member drives
             let disksHtml = r.drives.map(d => {
                 if (d.isMissing) {
@@ -2815,6 +2839,7 @@ async function fetchRaids() {
                     </div>
 
                     ${alertBanner}
+                    ${syncProgressHtml}
                     
                     <div style="background:var(--bg-dark); border:1px solid var(--border-color); border-radius:8px; padding:12px; margin-bottom:12px;">
                         <div style="font-size:12px; color:var(--text-secondary); font-weight:600; margin-bottom:8px; display:flex; justify-content:space-between;">
@@ -2835,6 +2860,13 @@ async function fetchRaids() {
             `;
         });
         container.innerHTML = html;
+
+        // Auto-poll if rebuilding
+        if (raidList.some(r => r.status === 'rebuilding' || (r.sync && r.sync.isSyncing))) {
+            setTimeout(() => {
+                if (activeTab === 'tab-storage') fetchRaids();
+            }, 3000);
+        }
     } catch (e) {
         const container = document.getElementById('raids-grid-container');
         if (container) container.innerHTML = `<div style="color:var(--accent-danger); padding:20px; text-align:center;">网络错误: ${e.message}</div>`;
