@@ -2654,8 +2654,8 @@ async function fetchPhysicalDisks() {
 
                         <div class="disk-right-actions">
                             ${healthBadge}
-                            <button class="drawer-toggle-btn" onclick="toggleDiskDrawer('${d.name}')" title="展开操作">
-                                ∨
+                            <button class="drawer-toggle-btn" onclick="toggleDiskDrawer('${d.name}')" title="展开/收起详情">
+                                <i class="fa-solid fa-chevron-down" id="${d.name}-chevron" style="transition: transform 0.25s ease; font-size:12px;"></i>
                             </button>
                         </div>
                     </div>

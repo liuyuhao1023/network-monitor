@@ -1055,7 +1055,10 @@ code {
 }
 
 /* ── Modern Storage UI Components ────────────────────────────────────────── */
-/* ── Screenshot-Exact Storage UI Components ───────────────────────────── */
+#disks-grid-container {
+    align-items: start;
+}
+
 .disk-card-screenshot-style {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -1066,6 +1069,8 @@ code {
     gap: 8px;
     transition: all 0.25s ease;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    align-self: start;
+    height: fit-content;
 }
 
 .disk-card-screenshot-style:hover {
