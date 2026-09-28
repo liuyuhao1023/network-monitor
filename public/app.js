@@ -8657,7 +8657,9 @@ function onDiskTimeoutSelectChange(devName) {
 
 async function showSpindownModal() {
     openModal('spindownModal');
-    await fetchSpindownStatus();
+    const tbody = document.getElementById('spindown-disks-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin"></i> 正在读取物理磁盘实时供电状态与空闲计数...</td></tr>';
+    await fetchSpindownStatus(false);
     
     if (spindownAutoRefreshTimer) clearInterval(spindownAutoRefreshTimer);
     spindownAutoRefreshTimer = setInterval(() => {
@@ -8677,7 +8679,7 @@ async function fetchSpindownStatus(silent = false) {
     const logsBox = document.getElementById('spindown-logs-box');
     if (!tbody) return;
 
-    if (!silent) {
+    if (!silent && !document.querySelector('[id^="spindown-row-"]')) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin"></i> 正在读取物理磁盘实时供电状态与空闲计数...</td></tr>';
     }
 
@@ -8685,7 +8687,7 @@ async function fetchSpindownStatus(silent = false) {
         const res = await apiFetch('/api/system/spindown');
         const data = await res.json();
         if (!data.success) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--accent-danger);">获取休眠信息失败: ${data.error}</td></tr>`;
+            if (!silent) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--accent-danger);">获取休眠信息失败: ${data.error}</td></tr>`;
             return;
         }
 
@@ -8695,7 +8697,7 @@ async function fetchSpindownStatus(silent = false) {
         const diskStats = data.diskStats || {};
         const logs = data.logs || [];
 
-        // Update Global controls (only if not currently typing in them)
+        // Update Global controls ONLY on initial open or explicit refresh (!silent)
         const globalTimeoutEl = document.getElementById('spindown-global-timeout');
         const globalCustomEl = document.getElementById('spindown-global-custom-min');
         const globalApmEl = document.getElementById('spindown-global-apm');
@@ -8725,6 +8727,8 @@ async function fetchSpindownStatus(silent = false) {
         let totalHdd = 0;
         let sleepingHdd = 0;
         let activeHdd = 0;
+
+        const tableAlreadyRendered = disks.length > 0 && disks.every(d => !!document.getElementById(`spindown-row-${d.name}`));
 
         let rowsHtml = '';
         disks.forEach(d => {
@@ -8795,57 +8799,68 @@ async function fetchSpindownStatus(silent = false) {
                 actionBtn = `<button class="btn btn-sm btn-secondary" onclick="triggerDiskSpindown('${d.name}')" style="font-size:11px; padding:4px 9px; border-color:rgba(168,85,247,0.3);"><i class="fa-solid fa-moon" style="color:#a855f7;"></i> 休眠</button>`;
             }
 
-            // Per-disk timeout dropdown setup
-            let timeoutSelectHtml = '';
-            if (isSsd) {
-                timeoutSelectHtml = '<span style="color:var(--text-secondary); font-size:11px;">-</span>';
+            // If table already exists, only update dynamic cells and DO NOT touch form dropdowns!
+            if (tableAlreadyRendered) {
+                const badgeEl = document.getElementById(`spindown-state-badge-${d.name}`);
+                const countdownEl = document.getElementById(`spindown-countdown-${d.name}`);
+                const actionBtnEl = document.getElementById(`spindown-action-btn-${d.name}`);
+                if (badgeEl) badgeEl.innerHTML = stateBadge;
+                if (countdownEl) countdownEl.innerHTML = countdownHtml;
+                if (actionBtnEl) actionBtnEl.innerHTML = actionBtn;
             } else {
-                const knownVals = [-1, 5, 10, 15, 20, 30, 60, 120, 0];
-                const isCustom = isCustomConfigured && !knownVals.includes(currentTimeout);
-                
-                timeoutSelectHtml = `
-                    <div style="display:flex; gap:6px; align-items:center;">
-                        <select id="spindown-disk-timeout-${d.name}" class="form-input" style="font-size:11.5px; padding:4px 6px; flex:1;" onchange="onDiskTimeoutSelectChange('${d.name}')">
-                            <option value="-1" ${currentTimeout === -1 ? 'selected' : ''}>跟随全局 (${config.globalTimeout || 15} 分钟)</option>
-                            <option value="5" ${currentTimeout === 5 ? 'selected' : ''}>5 分钟</option>
-                            <option value="10" ${currentTimeout === 10 ? 'selected' : ''}>10 分钟</option>
-                            <option value="15" ${currentTimeout === 15 ? 'selected' : ''}>15 分钟</option>
-                            <option value="20" ${currentTimeout === 20 ? 'selected' : ''}>20 分钟</option>
-                            <option value="30" ${currentTimeout === 30 ? 'selected' : ''}>30 分钟</option>
-                            <option value="60" ${currentTimeout === 60 ? 'selected' : ''}>1 小时</option>
-                            <option value="120" ${currentTimeout === 120 ? 'selected' : ''}>2 小时</option>
-                            <option value="custom" ${isCustom ? 'selected' : ''}>自定义分钟...</option>
-                            <option value="0" ${currentTimeout === 0 ? 'selected' : ''}>从不休眠</option>
-                        </select>
-                        <input type="number" id="spindown-disk-custom-${d.name}" class="form-input" placeholder="分钟" min="1" max="1440" style="font-size:11.5px; padding:4px 6px; width:65px; display:${isCustom ? 'inline-block' : 'none'};" value="${isCustom ? currentTimeout : '15'}" />
-                    </div>
+                // Per-disk timeout dropdown setup
+                let timeoutSelectHtml = '';
+                if (isSsd) {
+                    timeoutSelectHtml = '<span style="color:var(--text-secondary); font-size:11px;">-</span>';
+                } else {
+                    const knownVals = [-1, 5, 10, 15, 20, 30, 60, 120, 0];
+                    const isCustom = isCustomConfigured && !knownVals.includes(currentTimeout);
+                    
+                    timeoutSelectHtml = `
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <select id="spindown-disk-timeout-${d.name}" class="form-input" style="font-size:11.5px; padding:4px 6px; flex:1;" onchange="onDiskTimeoutSelectChange('${d.name}')">
+                                <option value="-1" ${currentTimeout === -1 ? 'selected' : ''}>跟随全局 (${config.globalTimeout || 15} 分钟)</option>
+                                <option value="5" ${currentTimeout === 5 ? 'selected' : ''}>5 分钟</option>
+                                <option value="10" ${currentTimeout === 10 ? 'selected' : ''}>10 分钟</option>
+                                <option value="15" ${currentTimeout === 15 ? 'selected' : ''}>15 分钟</option>
+                                <option value="20" ${currentTimeout === 20 ? 'selected' : ''}>20 分钟</option>
+                                <option value="30" ${currentTimeout === 30 ? 'selected' : ''}>30 分钟</option>
+                                <option value="60" ${currentTimeout === 60 ? 'selected' : ''}>1 小时</option>
+                                <option value="120" ${currentTimeout === 120 ? 'selected' : ''}>2 小时</option>
+                                <option value="custom" ${isCustom ? 'selected' : ''}>自定义分钟...</option>
+                                <option value="0" ${currentTimeout === 0 ? 'selected' : ''}>从不休眠</option>
+                            </select>
+                            <input type="number" id="spindown-disk-custom-${d.name}" class="form-input" placeholder="分钟" min="1" max="1440" style="font-size:11.5px; padding:4px 6px; width:65px; display:${isCustom ? 'inline-block' : 'none'};" value="${isCustom ? currentTimeout : '15'}" />
+                        </div>
+                    `;
+                }
+
+                rowsHtml += `
+                    <tr id="spindown-row-${d.name}" style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:10px 12px; vertical-align:middle;">
+                            <div style="font-family:monospace; font-weight:700; color:var(--text-primary); font-size:13px;">
+                                /dev/${d.name}
+                                ${d._hasSystem ? '<span class="disk-os-pill" style="margin-left:4px; font-size:9.5px;">OS</span>' : ''}
+                            </div>
+                            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">
+                                ${isSsd ? 'SSD' : 'HDD'} · ${d.size || ''}
+                            </div>
+                        </td>
+                        <td id="spindown-state-badge-${d.name}" style="padding:10px 12px; vertical-align:middle;">${stateBadge}</td>
+                        <td id="spindown-countdown-${d.name}" style="padding:10px 12px; vertical-align:middle;">${countdownHtml}</td>
+                        <td style="padding:10px 12px; vertical-align:middle;">${timeoutSelectHtml}</td>
+                        <td id="spindown-action-btn-${d.name}" style="padding:10px 12px; vertical-align:middle; text-align:right;">${actionBtn}</td>
+                    </tr>
                 `;
             }
-
-            rowsHtml += `
-                <tr style="border-bottom:1px solid var(--border-color);">
-                    <td style="padding:10px 12px; vertical-align:middle;">
-                        <div style="font-family:monospace; font-weight:700; color:var(--text-primary); font-size:13px;">
-                            /dev/${d.name}
-                            ${d._hasSystem ? '<span class="disk-os-pill" style="margin-left:4px; font-size:9.5px;">OS</span>' : ''}
-                        </div>
-                        <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">
-                            ${isSsd ? 'SSD' : 'HDD'} · ${d.size || ''}
-                        </div>
-                    </td>
-                    <td style="padding:10px 12px; vertical-align:middle;">${stateBadge}</td>
-                    <td style="padding:10px 12px; vertical-align:middle;">${countdownHtml}</td>
-                    <td style="padding:10px 12px; vertical-align:middle;">${timeoutSelectHtml}</td>
-                    <td style="padding:10px 12px; vertical-align:middle; text-align:right;">${actionBtn}</td>
-                </tr>
-            `;
         });
 
-        if (disks.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);">未检测到物理硬盘</td></tr>';
-        } else {
-            // Keep input values if user is interacting
-            tbody.innerHTML = rowsHtml;
+        if (!tableAlreadyRendered) {
+            if (disks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);">未检测到物理硬盘</td></tr>';
+            } else {
+                tbody.innerHTML = rowsHtml;
+            }
         }
 
         if (badge) {
