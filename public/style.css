@@ -1056,7 +1056,21 @@ code {
 
 /* ── Modern Storage UI Components ────────────────────────────────────────── */
 #disks-grid-container {
-    align-items: start;
+    display: block;
+    columns: 3 320px;
+    column-gap: 16px;
+}
+
+@media (max-width: 1200px) {
+    #disks-grid-container {
+        columns: 2 280px;
+    }
+}
+
+@media (max-width: 768px) {
+    #disks-grid-container {
+        columns: 1;
+    }
 }
 
 .disk-card-screenshot-style {
@@ -1067,10 +1081,14 @@ code {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    transition: all 0.25s ease;
+    transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-    align-self: start;
-    height: fit-content;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 16px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .disk-card-screenshot-style:hover {
@@ -1281,13 +1299,27 @@ code {
     color: var(--text-primary);
 }
 
-.disk-action-drawer {
+.disk-action-drawer-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, margin-top 0.35s ease;
+    opacity: 0;
+    margin-top: 0;
+}
+
+.disk-action-drawer-wrapper.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
     margin-top: 8px;
-    padding-top: 10px;
-    border-top: 1px dashed var(--border-color);
+}
+
+.disk-action-drawer-inner {
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
 }
 
 .drawer-btns {

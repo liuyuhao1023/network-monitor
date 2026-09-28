@@ -2499,15 +2499,12 @@ function drawDiskSparkline(diskName) {
 }
 
 function toggleDiskDrawer(diskName) {
-    const drawer = document.getElementById(`${diskName}-drawer`);
+    const wrapper = document.getElementById(`${diskName}-drawer-wrapper`);
     const chevron = document.getElementById(`${diskName}-chevron`);
-    if (!drawer) return;
-    if (drawer.style.display === 'none' || !drawer.style.display) {
-        drawer.style.display = 'flex';
-        if (chevron) chevron.style.transform = 'rotate(180deg)';
-    } else {
-        drawer.style.display = 'none';
-        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    if (!wrapper) return;
+    const isOpen = wrapper.classList.toggle('open');
+    if (chevron) {
+        chevron.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
     }
 }
 
@@ -2655,18 +2652,20 @@ async function fetchPhysicalDisks() {
                         <div class="disk-right-actions">
                             ${healthBadge}
                             <button class="drawer-toggle-btn" onclick="toggleDiskDrawer('${d.name}')" title="展开/收起详情">
-                                <i class="fa-solid fa-chevron-down" id="${d.name}-chevron" style="transition: transform 0.25s ease; font-size:12px;"></i>
+                                <i class="fa-solid fa-chevron-down" id="${d.name}-chevron" style="transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); font-size:12px;"></i>
                             </button>
                         </div>
                     </div>
 
                     <!-- EXPANDABLE ACTION DRAWER -->
-                    <div class="disk-action-drawer" id="${d.name}-drawer" style="display:none;">
-                        ${smartDetailHtml}
-                        ${mountDrawerHtml}
-                        <div class="drawer-btns">
-                            <button class="btn btn-sm btn-secondary" onclick="checkSmart('${d.name}')">SMART 健康检测</button>
-                            ${actions}
+                    <div class="disk-action-drawer-wrapper" id="${d.name}-drawer-wrapper">
+                        <div class="disk-action-drawer-inner">
+                            ${smartDetailHtml}
+                            ${mountDrawerHtml}
+                            <div class="drawer-btns">
+                                <button class="btn btn-sm btn-secondary" onclick="checkSmart('${d.name}')">SMART 健康检测</button>
+                                ${actions}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2674,7 +2673,7 @@ async function fetchPhysicalDisks() {
         });
         
         if (disksList.length === 0) {
-            container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px; grid-column: span 3;">未检测到物理磁盘</div>';
+            container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px;">未检测到物理磁盘</div>';
         } else {
             container.innerHTML = html;
 
