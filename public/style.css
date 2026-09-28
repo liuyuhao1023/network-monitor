@@ -1176,6 +1176,36 @@ code {
     border: 1px solid rgba(59, 130, 246, 0.35);
 }
 
+.disk-temp-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono, monospace);
+    letter-spacing: 0.02em;
+}
+
+.disk-temp-pill.cool {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-green, #10b981);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.disk-temp-pill.warm {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-orange, #f59e0b);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.disk-temp-pill.hot {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-danger, #ef4444);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
 .smart-detail-bar {
     display: flex;
     justify-content: space-between;

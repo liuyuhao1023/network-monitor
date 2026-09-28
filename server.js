@@ -2971,15 +2971,70 @@ async function markAccurateSystemFlags(disk) {
     return hasSystem;
 }
 
+function getDiskTemperaturesFromSysfs() {
+    const temps = {};
+    try {
+        if (fs.existsSync('/sys/class/hwmon')) {
+            const hwmonList = fs.readdirSync('/sys/class/hwmon');
+            for (const item of hwmonList) {
+                try {
+                    const hwDir = path.join('/sys/class/hwmon', item);
+                    const nameFile = path.join(hwDir, 'name');
+                    if (!fs.existsSync(nameFile)) continue;
+                    const hwName = fs.readFileSync(nameFile, 'utf8').trim();
+
+                    if (hwName === 'drivetemp') {
+                        let devName = null;
+                        const blockDir = path.join(hwDir, 'device', 'block');
+                        if (fs.existsSync(blockDir)) {
+                            const bEntries = fs.readdirSync(blockDir);
+                            if (bEntries.length > 0) devName = bEntries[0];
+                        }
+                        if (!devName) {
+                            try {
+                                const real = fs.realpathSync(path.join(hwDir, 'device'));
+                                devName = path.basename(real);
+                            } catch(e) {}
+                        }
+                        const tempFile = path.join(hwDir, 'temp1_input');
+                        if (devName && fs.existsSync(tempFile)) {
+                            const raw = parseInt(fs.readFileSync(tempFile, 'utf8').trim());
+                            if (!isNaN(raw)) {
+                                temps[devName] = Math.round(raw / 1000);
+                            }
+                        }
+                    } else if (hwName === 'nvme') {
+                        const tempFile = path.join(hwDir, 'temp1_input');
+                        if (fs.existsSync(tempFile)) {
+                            const raw = parseInt(fs.readFileSync(tempFile, 'utf8').trim());
+                            if (!isNaN(raw)) {
+                                try {
+                                    const real = fs.realpathSync(path.join(hwDir, 'device'));
+                                    const nvmeBase = path.basename(real); // e.g. nvme0
+                                    temps[nvmeBase] = Math.round(raw / 1000);
+                                    temps[`${nvmeBase}n1`] = Math.round(raw / 1000);
+                                } catch(e) {}
+                            }
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+    } catch(e) {}
+    return temps;
+}
+
 app.get('/api/system/disks', async (req, res) => {
     try {
         const { stdout } = await execPromise('lsblk --json -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,ROTA,SERIAL');
         const data = JSON.parse(stdout);
         const blockdevices = data.blockdevices || [];
+        const hwmonTemps = getDiskTemperaturesFromSysfs();
         
         for (let disk of blockdevices) {
             await markAccurateSystemFlags(disk);
             if (disk.type === 'disk') {
+                let diskTemp = hwmonTemps[disk.name] !== undefined ? hwmonTemps[disk.name] : null;
                 try {
                     const { stdout: smartOut } = await execPromise(`sudo smartctl -i -A /dev/${disk.name} 2>/dev/null || true`);
                     
@@ -2999,6 +3054,17 @@ app.get('/api/system/disks', async (req, res) => {
                                 if (attr === 'Power_On_Hours') {
                                     powerHours = raw;
                                 }
+                                if (['Temperature_Celsius', 'Airflow_Temperature_Cel', 'Temperature'].includes(attr)) {
+                                    if (diskTemp === null && raw > 0 && raw < 120) {
+                                        diskTemp = raw;
+                                    }
+                                }
+                            }
+                        } else if (line.includes('Temperature:') || line.includes('Temperature Sensor 1:')) {
+                            const m = line.match(/(\d+)\s*(?:C|Celsius)/i);
+                            if (m && diskTemp === null) {
+                                const val = parseInt(m[1]);
+                                if (!isNaN(val) && val > 0 && val < 120) diskTemp = val;
                             }
                         }
                     }
@@ -3010,14 +3076,18 @@ app.get('/api/system/disks', async (req, res) => {
                         healthPct = Math.max(0, 100 - badSectors * 2 - Math.floor(powerHours / 2500));
                     }
 
+                    disk.temperature = diskTemp;
                     disk._smart = {
                         isSsd,
                         badSectors,
                         powerHours,
                         healthPct,
+                        temperature: diskTemp,
                         status: badSectors > 0 ? 'WARNING' : 'PASSED'
                     };
-                } catch(e) {}
+                } catch(e) {
+                    disk.temperature = diskTemp;
+                }
             }
         }
         res.json({ success: true, data: blockdevices });

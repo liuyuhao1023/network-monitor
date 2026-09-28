@@ -2576,6 +2576,17 @@ async function fetchPhysicalDisks() {
                 ? '<span class="badge badge-primary" style="font-size:11px; padding:2px 6px;">RAID 成员</span>'
                 : '';
 
+            let tempVal = (d.temperature !== null && d.temperature !== undefined) ? d.temperature : (d._smart && d._smart.temperature !== null && d._smart.temperature !== undefined ? d._smart.temperature : null);
+            let tempBadge = '';
+            let tempDetailStr = 'N/A';
+            let tempColor = 'var(--text-secondary)';
+            if (tempVal !== null && !isNaN(tempVal)) {
+                let tempLevel = tempVal >= 55 ? 'hot' : (tempVal >= 45 ? 'warm' : 'cool');
+                tempColor = tempVal >= 55 ? 'var(--accent-danger)' : (tempVal >= 45 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                tempBadge = `<span class="disk-temp-pill ${tempLevel}" title="硬盘当前工作温度: ${tempVal}°C"><i class="fa-solid fa-temperature-half" style="font-size:10px;"></i>${tempVal}°C</span>`;
+                tempDetailStr = `${tempVal}°C`;
+            }
+
             let badSectors = d._smart ? d._smart.badSectors : 0;
             let powerHours = d._smart ? d._smart.powerHours : 0;
             let healthPct = d._smart ? d._smart.healthPct : 100;
@@ -2599,6 +2610,7 @@ async function fetchPhysicalDisks() {
             let smartDetailHtml = `
                 <div class="smart-detail-bar">
                     <span>介质: <strong style="color:${isSsd ? 'var(--accent-green)' : 'var(--accent-blue)'};">${isSsd ? '固态 (SSD)' : '机械 (HDD)'}</strong></span>
+                    <span>实时温度: <strong style="color:${tempColor};">${tempDetailStr}</strong></span>
                     <span>物理坏道: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${badSectors} 块</strong></span>
                     <span>通电: <strong>${powerHours} 小时</strong></span>
                     <span>健康: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${isSsd ? '100% 满血' : healthPct + '%'}</strong></span>
@@ -2630,6 +2642,7 @@ async function fetchPhysicalDisks() {
                                 <div class="disk-name-headline" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                                     <span class="disk-name-bold">/dev/${d.name}</span>
                                     ${typeBadge}
+                                    ${tempBadge}
                                     ${osBadge}
                                     ${raidBadge}
                                 </div>
