@@ -1944,16 +1944,23 @@ async function clearPushHistory() {
 
 function openModal(id) {
     const el = document.getElementById(id);
-    if (el) el.classList.add('show');
+    if (el) {
+        el.classList.add('show');
+        el.style.display = 'flex';
+    }
 }
 function closeModal(id) {
     const el = document.getElementById(id);
-    if (el) el.classList.remove('show');
+    if (el) {
+        el.classList.remove('show');
+        el.style.display = 'none';
+    }
 }
 
 document.addEventListener('click', (e) => {
-    if (e.target && e.target.classList && e.target.classList.contains('modal-backdrop')) {
+    if (e.target && e.target.classList && (e.target.classList.contains('modal-backdrop') || e.target.classList.contains('modal-overlay'))) {
         e.target.classList.remove('show');
+        e.target.style.display = 'none';
     }
 });
 
@@ -2560,7 +2567,8 @@ function renderDisksLayout(disksList) {
         if (d._hasSystem) {
             actions = '<span class="badge badge-danger" style="background:rgba(239,68,68,0.15); color:var(--accent-danger);">OS 系统保护</span>';
         } else if (d._mounts.length > 0) {
-            actions = `<button class="btn btn-sm btn-warning" onclick="unmountDisk('${d.name}')">卸载</button>`;
+            const mountStr = d._mounts.map(m => m.mount).join(', ');
+            actions = `<button class="btn btn-sm btn-warning" onclick="showUnmountModal('${d.name}', '${mountStr}')">卸载</button>`;
         } else {
             availableDisksForRaid.push(d);
             actions = `
@@ -2847,7 +2855,7 @@ async function fetchRaids() {
             // Mount state
             let mountInfo = r.mountpoint ? `<span class="badge badge-primary" style="font-family:monospace;">挂载于 ${r.mountpoint}</span>` : '<span class="badge badge-secondary">未挂载</span>';
             let mountBtn = r.mountpoint ? 
-                `<button class="btn btn-sm btn-secondary" onclick="unmountDisk('${r.device.replace('/dev/', '')}')">卸载</button>` :
+                `<button class="btn btn-sm btn-secondary" onclick="showUnmountModal('${r.device.replace('/dev/', '')}', '${r.mountpoint}')">卸载</button>` :
                 `<button class="btn btn-sm btn-secondary" onclick="showMountModal('${r.device.replace('/dev/', '')}')">挂载</button>`;
 
             html += `
@@ -2884,8 +2892,8 @@ async function fetchRaids() {
                     <div class="drawer-btns" style="display:flex; gap:8px; flex-wrap:wrap; border-top:1px dashed var(--border-color); padding-top:12px;">
                         ${mountBtn}
                         <button class="btn btn-sm btn-secondary" onclick="showFormatModal('${r.device.replace('/dev/', '')}')">格式化</button>
-                        <button class="btn btn-sm btn-secondary" onclick="stopRaid('${r.device}')" title="安全停止此阵列">⏹️ 停止阵列</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteRaid('${r.device}')">销毁阵列</button>
+                        <button class="btn btn-sm btn-secondary" onclick="showStopRaidModal('${r.device}')" title="安全停止此阵列">⏹️ 停止阵列</button>
+                        <button class="btn btn-sm btn-danger" onclick="showDeleteRaidModal('${r.device}')">销毁阵列</button>
                     </div>
                 </div>
             `;
@@ -2944,62 +2952,176 @@ async function stopRaid(device) {
     }
 }
 
+let currentActionTarget = '';
+let currentActionMount = '';
+let currentRaidTarget = '';
+
 async function checkSmart(device) {
     try {
         const res = await apiFetch(`/api/system/smart?device=${device}`);
         const data = await res.json();
-        if (data.success) {
-            alert(`SMART 检测结果:\n\n${data.raw.substring(0, 1000)}...`);
-        } else {
-            alert('获取 SMART 信息失败');
+        
+        const devEl = document.getElementById('smart-modal-device');
+        const typeBadgeEl = document.getElementById('smart-modal-type-badge');
+        const metaEl = document.getElementById('smart-modal-meta');
+        const overallEl = document.getElementById('smart-modal-overall-health');
+        const tempEl = document.getElementById('smart-modal-temp');
+        const powerEl = document.getElementById('smart-modal-power-hours');
+        const badSecEl = document.getElementById('smart-modal-bad-sectors');
+        const statusTextEl = document.getElementById('smart-modal-status-text');
+        const rawEl = document.getElementById('smart-modal-raw');
+
+        const disk = cachedDisksData ? cachedDisksData.find(d => d.name === device) : null;
+        const isSsd = (data && data.isSsd !== undefined) ? data.isSsd : (disk && (disk.rota === '0' || disk.rota === 0));
+
+        if (devEl) devEl.innerText = `/dev/${device}`;
+        if (typeBadgeEl) {
+            typeBadgeEl.className = isSsd ? 'disk-type-pill ssd' : 'disk-type-pill hdd';
+            typeBadgeEl.innerText = isSsd ? '[SSD]' : '[HDD]';
         }
+        if (metaEl) {
+            const modelStr = disk ? (disk.model || 'Generic Storage') : '存储设备';
+            const sizeStr = disk ? (disk.size || '') : '';
+            const snStr = disk && disk.serial ? ` · SN: ${disk.serial}` : '';
+            metaEl.innerText = `${modelStr} ${sizeStr ? '| ' + sizeStr : ''}${snStr}`;
+        }
+
+        const tempVal = (data && data.temperature !== null && data.temperature !== undefined) ? data.temperature : (disk && disk.temperature ? disk.temperature : null);
+        if (tempEl) {
+            if (tempVal !== null && !isNaN(tempVal)) {
+                tempEl.innerText = `${tempVal}°C`;
+                tempEl.style.color = tempVal >= 55 ? 'var(--accent-danger)' : (tempVal >= 45 ? 'var(--accent-orange)' : 'var(--accent-green)');
+            } else {
+                tempEl.innerText = 'N/A';
+                tempEl.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        const powerHours = (data && data.powerHours !== null && data.powerHours !== undefined) ? data.powerHours : (disk && disk._smart ? disk._smart.powerHours : null);
+        if (powerEl) {
+            powerEl.innerText = (powerHours !== null && !isNaN(powerHours)) ? `${powerHours} 小时` : 'N/A';
+        }
+
+        const badSectors = (data && data.badSectors !== null && data.badSectors !== undefined) ? data.badSectors : (disk && disk._smart ? disk._smart.badSectors : 0);
+        if (badSecEl) {
+            badSecEl.innerText = `${badSectors} 块`;
+            badSecEl.style.color = badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)';
+        }
+
+        const healthPct = (data && data.healthPct !== null && data.healthPct !== undefined) ? data.healthPct : 100;
+        if (statusTextEl) {
+            if (badSectors > 0) {
+                statusTextEl.innerText = '异常 (有坏道)';
+                statusTextEl.style.color = 'var(--accent-danger)';
+            } else {
+                statusTextEl.innerText = isSsd ? '良好 (满血)' : `良好 (${healthPct}%)`;
+                statusTextEl.style.color = 'var(--accent-green)';
+            }
+        }
+
+        if (overallEl) {
+            if (badSectors > 0) {
+                overallEl.innerHTML = `<span class="disk-health-pill warn">⚠️ 警告: 检测到 ${badSectors} 处重映射坏道</span>`;
+            } else {
+                overallEl.innerHTML = `<span class="disk-health-pill ok">✔ SMART 评估正常 (100% 满血)</span>`;
+            }
+        }
+
+        if (rawEl) {
+            rawEl.innerText = (data && data.raw) ? data.raw : '未获取到 SMART 原始日志文本';
+        }
+
+        openModal('smartDetailModal');
     } catch (e) {
-        alert('网络错误');
+        alert('获取 SMART 信息失败: ' + e.message);
     }
 }
 
-let currentActionTarget = '';
-
-function showFormatModal(device) {
-    currentActionTarget = device;
-    document.getElementById('format-disk-name').innerText = device;
-    document.getElementById('formatModal').style.display = 'flex';
+function copySmartRaw() {
+    const rawEl = document.getElementById('smart-modal-raw');
+    if (!rawEl) return;
+    navigator.clipboard.writeText(rawEl.innerText).then(() => {
+        const btn = event?.target;
+        if (btn) {
+            const orig = btn.innerText;
+            btn.innerText = '✅ 已复制';
+            setTimeout(() => { btn.innerText = orig; }, 2000);
+        }
+    }).catch(() => {
+        alert('复制失败，请手动选择复制');
+    });
 }
 
-async function submitFormat() {
+function showUnmountModal(device, mountpoint) {
+    currentActionTarget = device;
+    currentActionMount = mountpoint || '';
+    const devEl = document.getElementById('unmount-modal-dev');
+    const mountEl = document.getElementById('unmount-modal-mount');
+    if (devEl) devEl.innerText = `/dev/${device}`;
+    if (mountEl) mountEl.innerText = mountpoint || '全部关联挂载点';
+    const btn = document.getElementById('btn-confirm-unmount');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerText = '确认卸载';
+    }
+    openModal('unmountModal');
+}
+
+async function submitUnmount() {
     if (!currentActionTarget) return;
-    const fstype = document.getElementById('format-fstype').value;
-    document.getElementById('formatModal').style.display = 'none';
+    const btn = document.getElementById('btn-confirm-unmount');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '卸载中...';
+    }
     try {
-        const res = await apiFetch('/api/system/disk/format', {
+        const res = await apiFetch('/api/system/disk/unmount', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device: currentActionTarget, fstype })
+            body: JSON.stringify({ device: currentActionTarget })
         });
         const data = await res.json();
         if (data.success) {
-            alert('格式化成功');
+            closeModal('unmountModal');
             fetchStorageAll();
         } else {
-            alert(`格式化失败: ${data.error}`);
+            alert(`卸载失败: ${data.error}`);
         }
     } catch (e) {
-        alert('网络错误');
+        alert('网络错误: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '确认卸载';
+        }
     }
 }
 
 function showMountModal(device) {
     currentActionTarget = device;
-    document.getElementById('mount-disk-name').innerText = device;
-    document.getElementById('mount-path').value = `/mnt/${device}`;
-    document.getElementById('mountModal').style.display = 'flex';
+    const devEl = document.getElementById('mount-disk-name');
+    const pathEl = document.getElementById('mount-path');
+    if (devEl) devEl.innerText = `/dev/${device}`;
+    if (pathEl) pathEl.value = `/mnt/${device}`;
+    const btn = document.getElementById('btn-confirm-mount');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerText = '确认挂载';
+    }
+    openModal('mountModal');
 }
 
 async function submitMount() {
     if (!currentActionTarget) return;
-    const mountpoint = document.getElementById('mount-path').value.trim();
+    const pathEl = document.getElementById('mount-path');
+    const mountpoint = pathEl ? pathEl.value.trim() : '';
     if (!mountpoint) return alert('请输入挂载路径');
-    document.getElementById('mountModal').style.display = 'none';
+    
+    const btn = document.getElementById('btn-confirm-mount');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '挂载中...';
+    }
     try {
         const res = await apiFetch('/api/system/disk/mount', {
             method: 'POST',
@@ -3008,31 +3130,150 @@ async function submitMount() {
         });
         const data = await res.json();
         if (data.success) {
+            closeModal('mountModal');
             fetchStorageAll();
         } else {
             alert(`挂载失败: ${data.error}`);
         }
     } catch (e) {
-        alert('网络错误');
+        alert('网络错误: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '确认挂载';
+        }
     }
 }
 
-async function unmountDisk(device) {
-    if (!confirm(`确定要卸载 /dev/${device} 吗？`)) return;
+function showFormatModal(device) {
+    currentActionTarget = device;
+    const devEl = document.getElementById('format-disk-name');
+    if (devEl) devEl.innerText = `/dev/${device}`;
+    const cb = document.getElementById('format-risk-confirm');
+    if (cb) cb.checked = false;
+    const btn = document.getElementById('btn-confirm-format');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '💥 确认格式化';
+    }
+    openModal('formatModal');
+}
+
+async function submitFormat() {
+    if (!currentActionTarget) return;
+    const fstypeEl = document.getElementById('format-fstype');
+    const fstype = fstypeEl ? fstypeEl.value : 'ext4';
+    const btn = document.getElementById('btn-confirm-format');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '格式化中...';
+    }
     try {
-        const res = await apiFetch('/api/system/disk/unmount', {
+        const res = await apiFetch('/api/system/disk/format', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device })
+            body: JSON.stringify({ device: currentActionTarget, fstype })
         });
         const data = await res.json();
         if (data.success) {
+            closeModal('formatModal');
             fetchStorageAll();
         } else {
-            alert(`卸载失败: ${data.error}`);
+            alert(`格式化失败: ${data.error}`);
         }
     } catch (e) {
-        alert('网络错误');
+        alert('网络错误: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '💥 确认格式化';
+        }
+    }
+}
+
+function showStopRaidModal(device) {
+    currentRaidTarget = device;
+    const devEl = document.getElementById('stop-raid-dev');
+    if (devEl) devEl.innerText = device;
+    const btn = document.getElementById('btn-confirm-stop-raid');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerText = '确认停止阵列';
+    }
+    openModal('stopRaidModal');
+}
+
+async function submitStopRaid() {
+    if (!currentRaidTarget) return;
+    const btn = document.getElementById('btn-confirm-stop-raid');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '停止中...';
+    }
+    try {
+        const res = await apiFetch('/api/system/raid/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device: currentRaidTarget })
+        });
+        const data = await res.json();
+        if (data.success) {
+            closeModal('stopRaidModal');
+            fetchStorageAll();
+        } else {
+            alert('❌ 停止失败: ' + data.error);
+        }
+    } catch (e) {
+        alert('❌ 网络异常: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '确认停止阵列';
+        }
+    }
+}
+
+function showDeleteRaidModal(device) {
+    currentRaidTarget = device;
+    const devEl = document.getElementById('delete-raid-dev');
+    if (devEl) devEl.innerText = device;
+    const cb = document.getElementById('delete-raid-risk-confirm');
+    if (cb) cb.checked = false;
+    const btn = document.getElementById('btn-confirm-delete-raid');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '💥 确认销毁';
+    }
+    openModal('deleteRaidModal');
+}
+
+async function submitDeleteRaid() {
+    if (!currentRaidTarget) return;
+    const btn = document.getElementById('btn-confirm-delete-raid');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '销毁中...';
+    }
+    try {
+        const res = await apiFetch('/api/system/raid/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device: currentRaidTarget })
+        });
+        const data = await res.json();
+        if (data.success) {
+            closeModal('deleteRaidModal');
+            fetchStorageAll();
+        } else {
+            alert(`销毁失败: ${data.error}`);
+        }
+    } catch (e) {
+        alert('网络错误: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '💥 确认销毁';
+        }
     }
 }
 
@@ -3045,13 +3286,13 @@ function showRaidCreateModal() {
     } else {
         cbContainer.innerHTML = availableDisksForRaid.map(d => `
             <label style="display:flex; align-items:center; gap:10px; margin-bottom:8px; cursor:pointer;">
-                <input type="checkbox" value="${d.name}" class="raid-disk-cb">
-                <span style="font-family:monospace;">${d.name}</span>
+                <input type="checkbox" value="${d.name}" class="raid-disk-cb" style="width:16px; height:16px;">
+                <span style="font-family:monospace; font-weight:700;">/dev/${d.name}</span>
                 <span style="color:var(--text-secondary); font-size:12px;">${d.size} - ${d.model || 'Unknown'}</span>
             </label>
         `).join('');
     }
-    document.getElementById('raidCreateModal').style.display = 'flex';
+    openModal('raidCreateModal');
 }
 
 async function submitRaidCreate() {
@@ -3066,7 +3307,7 @@ async function submitRaidCreate() {
     if (level === '5' && devices.length < 3) return alert('RAID 5 至少需要 3 块磁盘');
     if (level === '10' && devices.length < 4) return alert('RAID 10 至少需要 4 块磁盘');
     
-    document.getElementById('raidCreateModal').style.display = 'none';
+    closeModal('raidCreateModal');
     try {
         const res = await apiFetch('/api/system/raid/create', {
             method: 'POST',
@@ -3085,24 +3326,8 @@ async function submitRaidCreate() {
     }
 }
 
-async function deleteRaid(device) {
-    if (!confirm(`确定要销毁阵列 ${device} 吗？此操作将导致数据永久丢失！`)) return;
-    try {
-        const res = await apiFetch('/api/system/raid/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device })
-        });
-        const data = await res.json();
-        if (data.success) {
-            alert('阵列已销毁');
-            fetchStorageAll();
-        } else {
-            alert(`销毁失败: ${data.error}`);
-        }
-    } catch (e) {
-        alert('网络错误');
-    }
+function showSmbShareModal() {
+    openModal('smbShareModal');
 }
 
 

@@ -1203,127 +1203,6 @@
                     </div>
                 </div>
 
-                <!-- Modals (Hidden by default) -->
-                <!-- RAID Create Modal -->
-                <div class="modal-overlay" id="raidCreateModal" style="display:none; z-index:9999;">
-                    <div class="modal-box" style="width:500px;">
-                        <div class="modal-header">
-                            <h3>新建存储空间 (RAID 阵列)</h3>
-                            <button class="btn-icon" onclick="document.getElementById('raidCreateModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="modal-body" style="padding:20px;">
-                            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:13px;">阵列自定义名称 (可选)</label>
-                            <input type="text" id="raid-name-input" class="form-input" placeholder="例如: data_pool / storage0 / md0 (默认自动生成)" style="width:100%; margin-bottom:16px;">
-
-                            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:13px;">RAID 级别</label>
-                            <select id="raid-level-select" class="form-input" style="width:100%; margin-bottom:16px;">
-                                <option value="0">RAID 0 (条带化 - 高速无冗余，最少 2 块盘)</option>
-                                <option value="1">RAID 1 (镜像 - 高冗余，最少 2 块盘)</option>
-                                <option value="5">RAID 5 (奇偶校验 - 平衡，最少 3 块盘)</option>
-                                <option value="10">RAID 10 (条带+镜像 - 高性能高冗余，最少 4 块盘)</option>
-                            </select>
-                            
-                            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:13px;">选择物理磁盘 (勾选多项)</label>
-                            <div id="raid-disk-checkboxes" style="background:rgba(0,0,0,0.2); border:1px solid var(--border-color); border-radius:8px; padding:10px; max-height:200px; overflow-y:auto; margin-bottom:10px;">
-                                <!-- Checkboxes populated via JS -->
-                            </div>
-                        </div>
-                        <div class="modal-footer" style="padding:20px; text-align:right;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('raidCreateModal').style.display='none'">取消</button>
-                            <button class="btn btn-primary" onclick="submitRaidCreate()">创建阵列</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Format Modal -->
-                <div class="modal-overlay" id="formatModal" style="display:none; z-index:9999;">
-                    <div class="modal-box" style="width:400px;">
-                        <div class="modal-header">
-                            <h3>格式化磁盘 <span id="format-disk-name" style="color:var(--accent-blue);"></span></h3>
-                            <button class="btn-icon" onclick="document.getElementById('formatModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="modal-body" style="padding:20px;">
-                            <div class="health-banner" style="--health-ok-bg:rgba(239,68,68,0.1); --health-ok-border:rgba(239,68,68,0.3); color:#ef4444; margin-bottom:20px;">
-                                ⚠️ 警告：此操作将抹除该分区上的所有数据，且不可恢复！
-                            </div>
-                            <label style="display:block; margin-bottom:8px; color:var(--text-secondary);">文件系统格式</label>
-                            <select id="format-fstype" class="form-input" style="width:100%;">
-                                <option value="ext4">ext4 (推荐，Linux 标准)</option>
-                                <option value="xfs">xfs (适合大文件存储)</option>
-                                <option value="btrfs">btrfs (高级文件系统)</option>
-                                <option value="vfat">vfat (FAT32/U盘)</option>
-                                <option value="ntfs">ntfs (Windows 兼容)</option>
-                            </select>
-                        </div>
-                        <div class="modal-footer" style="padding:20px; text-align:right;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('formatModal').style.display='none'">取消</button>
-                            <button class="btn btn-danger" onclick="submitFormat()">确认格式化</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Mount Modal -->
-                <div class="modal-overlay" id="mountModal" style="display:none; z-index:9999;">
-                    <div class="modal-box" style="width:400px;">
-                        <div class="modal-header">
-                            <h3>挂载分区 <span id="mount-disk-name" style="color:var(--accent-blue);"></span></h3>
-                            <button class="btn-icon" onclick="document.getElementById('mountModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="modal-body" style="padding:20px;">
-                            <label style="display:block; margin-bottom:8px; color:var(--text-secondary);">挂载点路径</label>
-                            <input type="text" id="mount-path" class="form-input" placeholder="例如: /mnt/data" style="width:100%; box-sizing:border-box;">
-                        </div>
-                        <div class="modal-footer" style="padding:20px; text-align:right;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('mountModal').style.display='none'">取消</button>
-                            <button class="btn btn-primary" onclick="submitMount()">确认挂载</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- SMB Share Add Modal -->
-                <div class="modal-overlay" id="smbShareModal" style="display:none; z-index:9999;">
-                    <div class="modal-box" style="width:480px;">
-                        <div class="modal-header">
-                            <h3><i class="fa-solid fa-folder-plus" style="color:var(--accent-blue); margin-right:8px;"></i>添加 SMB 局域网共享目录</h3>
-                            <button class="btn-icon" onclick="document.getElementById('smbShareModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="modal-body" style="padding:20px;">
-                            <div class="form-group" style="margin-bottom:14px;">
-                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">共享目录名称 (Share Name)</label>
-                                <input type="text" id="smb-share-name" class="form-input" placeholder="例如: Data / Media / Public" style="width:100%; box-sizing:border-box;">
-                            </div>
-                            <div class="form-group" style="margin-bottom:14px;">
-                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">服务器绝对路径 (Local Path)</label>
-                                <input type="text" id="smb-share-path" class="form-input mono" placeholder="例如: /mnt/md127 或 /data/share" style="width:100%; box-sizing:border-box;">
-                            </div>
-                            <div class="grid-2" style="gap:12px; margin-bottom:14px;">
-                                <div class="form-group">
-                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">访客匿名访问 (Guest Ok)</label>
-                                    <select id="smb-share-guest" class="form-input" style="width:100%;">
-                                        <option value="true" selected>允许 (免密访问)</option>
-                                        <option value="false">禁止 (需账号密码)</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">权限策略 (Access Mode)</label>
-                                    <select id="smb-share-ro" class="form-input" style="width:100%;">
-                                        <option value="false" selected>读写 (Read/Write)</option>
-                                        <option value="true">只读 (Read Only)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">备注说明 (Comment)</label>
-                                <input type="text" id="smb-share-comment" class="form-input" placeholder="例如: 影音影视媒体库" style="width:100%; box-sizing:border-box;">
-                            </div>
-                        </div>
-                        <div class="modal-footer" style="padding:20px; text-align:right;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('smbShareModal').style.display='none'">取消</button>
-                            <button class="btn btn-primary" onclick="submitSmbShare()"><i class="fa-solid fa-plus"></i> 创建共享</button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Summary KPI Row -->
                 <div class="grid-4 mb-20">
                     <div class="card stat-card">
@@ -5173,6 +5052,291 @@ phpinfo\(</textarea>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('modal-website-global-conf')">取消</button>
             <button class="btn btn-primary" style="background: #6366f1;" onclick="reloadNginxService(); closeModal('modal-website-global-conf');">💾 保存并重载 Web 服务</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ GLOBAL STORAGE & DISK OPERATION MODALS ══════════════════════════════════ -->
+
+<!-- 1. SMART Health Diagnostics Modal -->
+<div class="modal-overlay" id="smartDetailModal" style="display:none;">
+    <div class="modal-box" style="width:680px; max-width:94vw;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-heart-pulse" style="color:var(--accent-green); margin-right:8px;"></i>SMART 磁盘健康诊断报告</h3>
+            <button class="modal-close" onclick="closeModal('smartDetailModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px; max-height:calc(85vh - 140px); overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:rgba(0,0,0,0.15); padding:12px 16px; border-radius:10px; border:1px solid var(--border-color);">
+                <div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                        <span id="smart-modal-device">/dev/sda</span>
+                        <span id="smart-modal-type-badge" class="disk-type-pill ssd">[SSD]</span>
+                    </div>
+                    <div id="smart-modal-meta" style="font-size:12px; color:var(--text-secondary); margin-top:4px;">加载中...</div>
+                </div>
+                <div id="smart-modal-overall-health">
+                    <span class="disk-health-pill ok">✔ 健康度 100%</span>
+                </div>
+            </div>
+
+            <!-- 4 Metrics Grid -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:16px;">
+                <div class="card" style="padding:10px; text-align:center; border:1px solid var(--border-color);">
+                    <div style="font-size:11px; color:var(--text-secondary);">实时工作温度</div>
+                    <div id="smart-modal-temp" style="font-size:16px; font-weight:700; margin-top:4px; color:var(--accent-green);">-</div>
+                </div>
+                <div class="card" style="padding:10px; text-align:center; border:1px solid var(--border-color);">
+                    <div style="font-size:11px; color:var(--text-secondary);">累计通电时长</div>
+                    <div id="smart-modal-power-hours" style="font-size:16px; font-weight:700; margin-top:4px; color:var(--text-primary);">-</div>
+                </div>
+                <div class="card" style="padding:10px; text-align:center; border:1px solid var(--border-color);">
+                    <div style="font-size:11px; color:var(--text-secondary);">重映射物理坏道</div>
+                    <div id="smart-modal-bad-sectors" style="font-size:16px; font-weight:700; margin-top:4px; color:var(--accent-green);">0 块</div>
+                </div>
+                <div class="card" style="padding:10px; text-align:center; border:1px solid var(--border-color);">
+                    <div style="font-size:11px; color:var(--text-secondary);">综合健康状态</div>
+                    <div id="smart-modal-status-text" style="font-size:16px; font-weight:700; margin-top:4px; color:var(--accent-green);">良好</div>
+                </div>
+            </div>
+
+            <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                <span>详细诊断数据日志 (Raw SMART Output)</span>
+                <button class="btn btn-sm btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="copySmartRaw()">📋 复制日志</button>
+            </div>
+            <pre id="smart-modal-raw" class="log-terminal-dark" style="height:220px; font-size:11px; padding:12px; border-radius:8px; overflow-y:auto;"></pre>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="closeModal('smartDetailModal')">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 2. Unmount Modal -->
+<div class="modal-overlay" id="unmountModal" style="display:none;">
+    <div class="modal-box" style="width:460px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-orange); margin-right:8px;"></i>安全卸载磁盘确认</h3>
+            <button class="modal-close" onclick="closeModal('unmountModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div class="health-banner" style="--health-ok-bg:rgba(245,158,11,0.12); --health-ok-border:rgba(245,158,11,0.35); color:var(--accent-orange); margin-bottom:16px; line-height:1.5;">
+                ⚠️ <strong>风险提示</strong>：卸载操作将立即切断与该磁盘挂载点的一切文件连接。如果后台有 Docker 容器、Samba 共享或服务正在读写，可能会引发 I/O 错误。
+            </div>
+            <div style="background:rgba(0,0,0,0.15); padding:14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="color:var(--text-secondary); font-size:13px;">目标设备</span>
+                    <strong id="unmount-modal-dev" style="font-family:monospace; color:var(--accent-blue);">/dev/sda1</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span style="color:var(--text-secondary); font-size:13px;">当前挂载点</span>
+                    <strong id="unmount-modal-mount" style="font-family:monospace; color:var(--text-primary);">-</strong>
+                </div>
+            </div>
+            <p style="font-size:12px; color:var(--text-secondary); margin:0;">请确认无未保存的数据操作后，点击下方按钮确认卸载。</p>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('unmountModal')">取消</button>
+            <button class="btn btn-warning" id="btn-confirm-unmount" onclick="submitUnmount()">确认卸载</button>
+        </div>
+    </div>
+</div>
+
+<!-- 3. Mount Modal -->
+<div class="modal-overlay" id="mountModal" style="display:none;">
+    <div class="modal-box" style="width:460px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-link" style="color:var(--accent-blue); margin-right:8px;"></i>挂载磁盘分区</h3>
+            <button class="modal-close" onclick="closeModal('mountModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div style="background:rgba(0,0,0,0.15); padding:12px 14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:var(--text-secondary); font-size:13px;">目标磁盘</span>
+                <strong id="mount-disk-name" style="font-family:monospace; color:var(--accent-blue); font-size:14px;">/dev/sdb1</strong>
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">挂载目录绝对路径</label>
+                <input type="text" id="mount-path" class="form-input mono" placeholder="例如: /mnt/data 或 /data/storage" style="width:100%; box-sizing:border-box;">
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; align-items:center;">
+                <span style="font-size:11px; color:var(--text-secondary);">快捷预设:</span>
+                <button type="button" class="btn btn-sm btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="document.getElementById('mount-path').value='/mnt/' + currentActionTarget">/mnt/[盘名]</button>
+                <button type="button" class="btn btn-sm btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="document.getElementById('mount-path').value='/data/storage'">/data/storage</button>
+                <button type="button" class="btn btn-sm btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="document.getElementById('mount-path').value='/mnt/media'">/mnt/media</button>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('mountModal')">取消</button>
+            <button class="btn btn-primary" id="btn-confirm-mount" onclick="submitMount()">确认挂载</button>
+        </div>
+    </div>
+</div>
+
+<!-- 4. Format Modal -->
+<div class="modal-overlay" id="formatModal" style="display:none;">
+    <div class="modal-box" style="width:480px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-fire" style="color:var(--accent-danger); margin-right:8px;"></i>格式化磁盘 (高危操作)</h3>
+            <button class="modal-close" onclick="closeModal('formatModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div class="health-banner" style="--health-ok-bg:rgba(239,68,68,0.15); --health-ok-border:rgba(239,68,68,0.4); color:var(--accent-danger); margin-bottom:16px; font-size:13px; line-height:1.5;">
+                🚨 <strong>极度危险警告</strong>：格式化操作将<strong>永久抹除</strong>目标磁盘上的所有分区及全部数据文件！此操作完全不可逆！
+            </div>
+            <div style="background:rgba(0,0,0,0.15); padding:12px 14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:var(--text-secondary); font-size:13px;">目标设备</span>
+                <strong id="format-disk-name" style="font-family:monospace; color:var(--accent-danger); font-size:15px;">/dev/sdb</strong>
+            </div>
+            <div class="form-group" style="margin-bottom:16px;">
+                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">目标文件系统类型</label>
+                <select id="format-fstype" class="form-input" style="width:100%;">
+                    <option value="ext4">ext4 (推荐 - Linux 标准文件系统，稳定高效)</option>
+                    <option value="xfs">xfs (适合超大文件与高性能并发 I/O)</option>
+                    <option value="btrfs">btrfs (高级写时复制与快照支持)</option>
+                    <option value="ntfs">ntfs (Windows 兼容格式)</option>
+                    <option value="vfat">vfat / FAT32 (便携设备兼容)</option>
+                </select>
+            </div>
+            <div style="background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:12px 14px; margin-bottom:8px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-primary);">
+                    <input type="checkbox" id="format-risk-confirm" onchange="document.getElementById('btn-confirm-format').disabled = !this.checked;" style="width:16px; height:16px; accent-color:var(--accent-danger);">
+                    <span>我已知晓此操作将清空该磁盘所有数据，确认抹除</span>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('formatModal')">取消</button>
+            <button class="btn btn-danger" id="btn-confirm-format" disabled onclick="submitFormat()">💥 确认格式化</button>
+        </div>
+    </div>
+</div>
+
+<!-- 5. Stop RAID Modal -->
+<div class="modal-overlay" id="stopRaidModal" style="display:none;">
+    <div class="modal-box" style="width:460px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-circle-stop" style="color:var(--accent-orange); margin-right:8px;"></i>停止 RAID 阵列</h3>
+            <button class="modal-close" onclick="closeModal('stopRaidModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div class="health-banner" style="--health-ok-bg:rgba(245,158,11,0.12); --health-ok-border:rgba(245,158,11,0.35); color:var(--accent-orange); margin-bottom:16px;">
+                ⚠️ 提示：停止阵列将释放底层物理磁盘占用，避免幽灵设备锁死。在更换故障磁盘或迁移阵列前建议先停止。
+            </div>
+            <div style="background:rgba(0,0,0,0.15); padding:12px 14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px; display:flex; justify-content:space-between;">
+                <span style="color:var(--text-secondary); font-size:13px;">阵列设备</span>
+                <strong id="stop-raid-dev" style="font-family:monospace; color:var(--accent-blue); font-size:14px;">md0</strong>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('stopRaidModal')">取消</button>
+            <button class="btn btn-warning" id="btn-confirm-stop-raid" onclick="submitStopRaid()">确认停止阵列</button>
+        </div>
+    </div>
+</div>
+
+<!-- 6. Delete RAID Modal -->
+<div class="modal-overlay" id="deleteRaidModal" style="display:none;">
+    <div class="modal-box" style="width:480px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-trash-can" style="color:var(--accent-danger); margin-right:8px;"></i>销毁 RAID 阵列 (高危操作)</h3>
+            <button class="modal-close" onclick="closeModal('deleteRaidModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div class="health-banner" style="--health-ok-bg:rgba(239,68,68,0.15); --health-ok-border:rgba(239,68,68,0.4); color:var(--accent-danger); margin-bottom:16px; font-size:13px; line-height:1.5;">
+                🚨 <strong>极度危险警告</strong>：销毁阵列将彻底清除 RAID 超级块与分区元数据，该阵列中的<strong>所有文件将永久丢失</strong>！
+            </div>
+            <div style="background:rgba(0,0,0,0.15); padding:12px 14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px; display:flex; justify-content:space-between;">
+                <span style="color:var(--text-secondary); font-size:13px;">目标阵列</span>
+                <strong id="delete-raid-dev" style="font-family:monospace; color:var(--accent-danger); font-size:15px;">md0</strong>
+            </div>
+            <div style="background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:12px 14px; margin-bottom:8px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-primary);">
+                    <input type="checkbox" id="delete-raid-risk-confirm" onchange="document.getElementById('btn-confirm-delete-raid').disabled = !this.checked;" style="width:16px; height:16px; accent-color:var(--accent-danger);">
+                    <span>我已知晓销毁阵列将导致数据永久丢失，确认销毁</span>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('deleteRaidModal')">取消</button>
+            <button class="btn btn-danger" id="btn-confirm-delete-raid" disabled onclick="submitDeleteRaid()">💥 确认销毁</button>
+        </div>
+    </div>
+</div>
+
+<!-- 7. RAID Create Modal -->
+<div class="modal-overlay" id="raidCreateModal" style="display:none;">
+    <div class="modal-box" style="width:520px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-layer-group" style="color:var(--accent-blue); margin-right:8px;"></i>新建存储空间 (RAID 阵列)</h3>
+            <button class="modal-close" onclick="closeModal('raidCreateModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:12px; font-weight:600;">阵列自定义名称 (可选)</label>
+                <input type="text" id="raid-name-input" class="form-input" placeholder="例如: data_pool / storage0 / md0 (默认自动生成)" style="width:100%; box-sizing:border-box;">
+            </div>
+
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:12px; font-weight:600;">RAID 级别</label>
+                <select id="raid-level-select" class="form-input" style="width:100%;">
+                    <option value="0">RAID 0 (条带化 - 高速无冗余，最少 2 块盘)</option>
+                    <option value="1">RAID 1 (镜像 - 高冗余，最少 2 块盘)</option>
+                    <option value="5">RAID 5 (奇偶校验 - 平衡，最少 3 块盘)</option>
+                    <option value="10">RAID 10 (条带+镜像 - 高性能高冗余，最少 4 块盘)</option>
+                </select>
+            </div>
+            
+            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:12px; font-weight:600;">选择物理磁盘 (勾选多项)</label>
+            <div id="raid-disk-checkboxes" style="background:rgba(0,0,0,0.2); border:1px solid var(--border-color); border-radius:8px; padding:10px; max-height:200px; overflow-y:auto; margin-bottom:10px;">
+                <!-- Checkboxes populated via JS -->
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('raidCreateModal')">取消</button>
+            <button class="btn btn-primary" onclick="submitRaidCreate()">创建阵列</button>
+        </div>
+    </div>
+</div>
+
+<!-- 8. SMB Share Add Modal -->
+<div class="modal-overlay" id="smbShareModal" style="display:none;">
+    <div class="modal-box" style="width:480px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-folder-plus" style="color:var(--accent-blue); margin-right:8px;"></i>添加 SMB 局域网共享目录</h3>
+            <button class="modal-close" onclick="closeModal('smbShareModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">共享目录名称 (Share Name)</label>
+                <input type="text" id="smb-share-name" class="form-input" placeholder="例如: Data / Media / Public" style="width:100%; box-sizing:border-box;">
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">服务器绝对路径 (Local Path)</label>
+                <input type="text" id="smb-share-path" class="form-input mono" placeholder="例如: /mnt/md127 或 /data/share" style="width:100%; box-sizing:border-box;">
+            </div>
+            <div class="grid-2" style="gap:12px; margin-bottom:14px;">
+                <div class="form-group">
+                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">访客匿名访问 (Guest Ok)</label>
+                    <select id="smb-share-guest" class="form-input" style="width:100%;">
+                        <option value="true" selected>允许 (免密访问)</option>
+                        <option value="false">禁止 (需账号密码)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">权限策略 (Access Mode)</label>
+                    <select id="smb-share-ro" class="form-input" style="width:100%;">
+                        <option value="false" selected>读写 (Read/Write)</option>
+                        <option value="true">只读 (Read Only)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">备注说明 (Comment)</label>
+                <input type="text" id="smb-share-comment" class="form-input" placeholder="例如: 影音影视媒体库" style="width:100%; box-sizing:border-box;">
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('smbShareModal')">取消</button>
+            <button class="btn btn-primary" onclick="submitSmbShare()"><i class="fa-solid fa-plus"></i> 创建共享</button>
         </div>
     </div>
 </div>
