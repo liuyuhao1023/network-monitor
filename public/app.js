@@ -2587,6 +2587,19 @@ function renderDisksLayout(disksList) {
             ? '<span class="badge badge-primary" style="font-size:11px; padding:2px 6px;">RAID 成员</span>'
             : '';
 
+        let pState = d.powerState || 'active/idle';
+        let powerBadge = '';
+        let spindownBtn = '';
+        if (isSsd) {
+            powerBadge = '<span class="disk-standby-pill ssd" title="固态硬盘（无机械电机）"><i class="fa-solid fa-bolt"></i> 固态</span>';
+        } else if (pState === 'standby' || pState === 'sleeping') {
+            powerBadge = '<span class="disk-standby-pill sleeping" title="硬盘马达已停转休眠中"><i class="fa-solid fa-moon"></i> 已休眠</span>';
+            spindownBtn = `<button class="btn btn-sm btn-secondary" onclick="triggerDiskWakeup('${d.name}')" title="唤醒硬盘旋转"><i class="fa-solid fa-bolt" style="color:var(--accent-orange);"></i> 唤醒</button>`;
+        } else {
+            powerBadge = '<span class="disk-standby-pill active" title="硬盘马达旋转运行中"><i class="fa-solid fa-arrows-rotate"></i> 运行中</span>';
+            spindownBtn = `<button class="btn btn-sm btn-secondary" onclick="triggerDiskSpindown('${d.name}')" title="立即停转进入休眠"><i class="fa-solid fa-moon" style="color:#a855f7;"></i> 休眠</button>`;
+        }
+
         let tempVal = (d.temperature !== null && d.temperature !== undefined) ? d.temperature : (d._smart && d._smart.temperature !== null && d._smart.temperature !== undefined ? d._smart.temperature : null);
         let tempBadge = '';
         let tempDetailStr = 'N/A';
@@ -2653,6 +2666,7 @@ function renderDisksLayout(disksList) {
                             <div class="disk-name-headline" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                                 <span class="disk-name-bold">/dev/${d.name}</span>
                                 ${typeBadge}
+                                ${powerBadge}
                                 ${tempBadge}
                                 ${osBadge}
                                 ${raidBadge}
@@ -2678,6 +2692,7 @@ function renderDisksLayout(disksList) {
                         ${mountDrawerHtml}
                         <div class="drawer-btns">
                             <button class="btn btn-sm btn-secondary" onclick="checkSmart('${d.name}')">SMART 健康检测</button>
+                            ${spindownBtn}
                             ${actions}
                         </div>
                     </div>
@@ -8600,6 +8615,263 @@ function quickDeployTemplate(tpl) {
         document.getElementById('create-site-remark').value = 'Express API 网关';
     }
     showToast(`📦 已自动填入 ${tpl} 模板初始化配置`, 2000);
+}
+
+// ── HDD Spindown & Power Management Module ───────────────────────────────────
+let cachedSpindownData = null;
+
+async function showSpindownModal() {
+    openModal('spindownModal');
+    await fetchSpindownStatus();
+}
+
+async function fetchSpindownStatus(silent = false) {
+    const tbody = document.getElementById('spindown-disks-tbody');
+    const badge = document.getElementById('spindown-summary-badge');
+    if (!tbody) return;
+
+    if (!silent) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);">正在检测各硬盘实时供电与休眠状态...</td></tr>';
+    }
+
+    try {
+        const res = await apiFetch('/api/system/spindown');
+        const data = await res.json();
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--accent-danger);">获取休眠信息失败: ${data.error}</td></tr>`;
+            return;
+        }
+
+        cachedSpindownData = data;
+        const config = data.config || {};
+        const powerStates = data.powerStates || {};
+
+        const globalTimeoutEl = document.getElementById('spindown-global-timeout');
+        const globalApmEl = document.getElementById('spindown-global-apm');
+        if (globalTimeoutEl && config.globalTimeout !== undefined) globalTimeoutEl.value = String(config.globalTimeout);
+        if (globalApmEl && config.globalApm !== undefined) globalApmEl.value = String(config.globalApm);
+
+        const disks = cachedDisksData ? cachedDisksData.filter(d => d.type === 'disk') : [];
+        let totalHdd = 0;
+        let sleepingHdd = 0;
+        let activeHdd = 0;
+
+        let rowsHtml = '';
+        disks.forEach(d => {
+            const isSsd = d._smart ? d._smart.isSsd : (d.rota === '0' || d.rota === 0 || (d.model && (d.model.toLowerCase().includes('ssd') || d.model.toLowerCase().includes('nvme'))));
+            const pState = powerStates[d.name] || 'active/idle';
+            const diskCfg = (config.disks && config.disks[d.name]) ? config.disks[d.name] : {};
+            const isCustomTimeout = diskCfg.timeout !== undefined && diskCfg.timeout !== null;
+            const currentTimeout = isCustomTimeout ? diskCfg.timeout : -1; // -1 means inherit global
+
+            if (!isSsd) {
+                totalHdd++;
+                if (pState === 'standby' || pState === 'sleeping') {
+                    sleepingHdd++;
+                } else {
+                    activeHdd++;
+                }
+            }
+
+            let stateBadge = '';
+            let actionBtn = '';
+            if (isSsd) {
+                stateBadge = '<span class="disk-standby-pill ssd"><i class="fa-solid fa-bolt"></i> 固态无马达</span>';
+                actionBtn = '<span style="color:var(--text-secondary); font-size:11px;">无需休眠</span>';
+            } else if (pState === 'standby' || pState === 'sleeping') {
+                stateBadge = '<span class="disk-standby-pill sleeping"><i class="fa-solid fa-moon"></i> 已休眠停转</span>';
+                actionBtn = `<button class="btn btn-sm btn-secondary" onclick="triggerDiskWakeup('${d.name}')" style="font-size:11px; padding:3px 8px;"><i class="fa-solid fa-bolt" style="color:var(--accent-orange);"></i> 立即唤醒</button>`;
+            } else {
+                stateBadge = '<span class="disk-standby-pill active"><i class="fa-solid fa-arrows-rotate"></i> 运行旋转中</span>';
+                actionBtn = `<button class="btn btn-sm btn-secondary" onclick="triggerDiskSpindown('${d.name}')" style="font-size:11px; padding:3px 8px;"><i class="fa-solid fa-moon" style="color:#a855f7;"></i> 立即休眠</button>`;
+            }
+
+            rowsHtml += `
+                <tr style="border-bottom:1px solid var(--border-color);">
+                    <td style="padding:10px 12px; font-family:monospace; font-weight:700; color:var(--text-primary);">
+                        /dev/${d.name}
+                        ${d._hasSystem ? '<span class="disk-os-pill" style="margin-left:4px;">OS</span>' : ''}
+                    </td>
+                    <td style="padding:10px 12px; color:var(--text-secondary);">
+                        <strong style="color:var(--text-primary); font-size:11.5px;">${isSsd ? 'SSD' : 'HDD'}</strong> · ${d.model || 'Generic Storage'} (${d.size || ''})
+                    </td>
+                    <td style="padding:10px 12px;">${stateBadge}</td>
+                    <td style="padding:10px 12px;">
+                        ${isSsd ? '<span style="color:var(--text-secondary); font-size:11px;">-</span>' : `
+                            <select id="spindown-disk-timeout-${d.name}" class="form-input" style="font-size:11.5px; padding:4px 8px; width:160px;">
+                                <option value="-1" ${currentTimeout === -1 ? 'selected' : ''}>跟随全局策略 (${config.globalTimeout || 15} 分钟)</option>
+                                <option value="5" ${currentTimeout === 5 ? 'selected' : ''}>5 分钟</option>
+                                <option value="10" ${currentTimeout === 10 ? 'selected' : ''}>10 分钟</option>
+                                <option value="15" ${currentTimeout === 15 ? 'selected' : ''}>15 分钟</option>
+                                <option value="20" ${currentTimeout === 20 ? 'selected' : ''}>20 分钟</option>
+                                <option value="30" ${currentTimeout === 30 ? 'selected' : ''}>30 分钟</option>
+                                <option value="60" ${currentTimeout === 60 ? 'selected' : ''}>1 小时</option>
+                                <option value="120" ${currentTimeout === 120 ? 'selected' : ''}>2 小时</option>
+                                <option value="0" ${currentTimeout === 0 ? 'selected' : ''}>从不休眠 (永不停转)</option>
+                            </select>
+                        `}
+                    </td>
+                    <td style="padding:10px 12px; text-align:right;">${actionBtn}</td>
+                </tr>
+            `;
+        });
+
+        if (disks.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);">未检测到物理硬盘</td></tr>';
+        } else {
+            tbody.innerHTML = rowsHtml;
+        }
+
+        if (badge) {
+            badge.innerText = `机械盘 ${totalHdd} 块 · 🟢 ${activeHdd} 活跃 / 💤 ${sleepingHdd} 休眠`;
+        }
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--accent-danger);">网络请求异常: ${e.message}</td></tr>`;
+    }
+}
+
+async function saveSpindownConfig() {
+    const btn = document.getElementById('btn-save-spindown');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 保存中...';
+    }
+
+    try {
+        const globalTimeout = parseInt(document.getElementById('spindown-global-timeout')?.value) || 15;
+        const globalApm = parseInt(document.getElementById('spindown-global-apm')?.value) || 127;
+
+        const disksConfig = {};
+        const disks = cachedDisksData ? cachedDisksData.filter(d => d.type === 'disk') : [];
+
+        disks.forEach(d => {
+            const isSsd = d._smart ? d._smart.isSsd : (d.rota === '0' || d.rota === 0 || (d.model && (d.model.toLowerCase().includes('ssd') || d.model.toLowerCase().includes('nvme'))));
+            if (isSsd) return;
+
+            const selectEl = document.getElementById(`spindown-disk-timeout-${d.name}`);
+            if (selectEl) {
+                const val = parseInt(selectEl.value);
+                if (val !== -1) {
+                    disksConfig[d.name] = {
+                        enabled: val > 0,
+                        timeout: val,
+                        apm: globalApm
+                    };
+                }
+            }
+        });
+
+        const payload = {
+            globalTimeout,
+            globalApm,
+            disks: disksConfig
+        };
+
+        const res = await apiFetch('/api/system/spindown/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('✅ ' + data.message, 3000);
+            closeModal('spindownModal');
+            fetchPhysicalDisks();
+        } else {
+            alert('保存休眠策略失败: ' + data.error);
+        }
+    } catch (e) {
+        alert('网络请求异常: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存并应用休眠策略';
+        }
+    }
+}
+
+async function triggerDiskSpindown(device) {
+    try {
+        const res = await apiFetch('/api/system/spindown/trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`💤 ${device} 已发送停转休眠指令`, 2500);
+            fetchPhysicalDisks();
+            if (document.getElementById('spindownModal')?.classList.contains('show')) {
+                fetchSpindownStatus(true);
+            }
+        } else {
+            alert('休眠指令发送失败: ' + data.error);
+        }
+    } catch (e) {
+        alert('网络异常: ' + e.message);
+    }
+}
+
+async function triggerDiskWakeup(device) {
+    try {
+        const res = await apiFetch('/api/system/spindown/wakeup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`⚡ ${device} 已成功唤醒旋转`, 2500);
+            fetchPhysicalDisks();
+            if (document.getElementById('spindownModal')?.classList.contains('show')) {
+                fetchSpindownStatus(true);
+            }
+        } else {
+            alert('唤醒指令发送失败: ' + data.error);
+        }
+    } catch (e) {
+        alert('网络异常: ' + e.message);
+    }
+}
+
+async function triggerAllSpindown() {
+    try {
+        const res = await apiFetch('/api/system/spindown/trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device: 'all' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('💤 ' + data.message, 3000);
+            fetchPhysicalDisks();
+            fetchSpindownStatus(true);
+        } else {
+            alert('批量休眠失败: ' + data.error);
+        }
+    } catch (e) {
+        alert('网络异常: ' + e.message);
+    }
+}
+
+async function triggerAllWakeup() {
+    try {
+        const res = await apiFetch('/api/system/spindown/wakeup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device: 'all' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('⚡ ' + data.message, 3000);
+            fetchPhysicalDisks();
+            fetchSpindownStatus(true);
+        } else {
+            alert('批量唤醒失败: ' + data.error);
+        }
+    } catch (e) {
+        alert('网络异常: ' + e.message);
+    }
 }
 
 

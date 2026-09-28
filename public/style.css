@@ -1222,6 +1222,34 @@ code {
     border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
+.disk-standby-pill {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.disk-standby-pill.active {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-green, #10b981);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.disk-standby-pill.sleeping {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.disk-standby-pill.ssd {
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
 .smart-detail-bar {
     display: flex;
     justify-content: space-between;

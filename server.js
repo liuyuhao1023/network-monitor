@@ -3024,24 +3024,134 @@ function getDiskTemperaturesFromSysfs() {
     return temps;
 }
 
+// ── HDD Spindown & Power Management Module ───────────────────────────────────
+const SPINDOWN_CONFIG_PATH = path.join(__dirname, 'spindown_config.json');
+
+function readSpindownConfig() {
+    try {
+        if (fs.existsSync(SPINDOWN_CONFIG_PATH)) {
+            return JSON.parse(fs.readFileSync(SPINDOWN_CONFIG_PATH, 'utf8'));
+        }
+    } catch (e) {
+        console.error('Error reading spindown config:', e.message);
+    }
+    return {
+        globalTimeout: 15, // 15 minutes default
+        globalApm: 127,    // APM 127 (allow spindown)
+        disks: {}
+    };
+}
+
+function saveSpindownConfig(cfg) {
+    try {
+        fs.writeFileSync(SPINDOWN_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('Error saving spindown config:', e.message);
+        return false;
+    }
+}
+
+function minutesToHdparmTimeoutCode(mins) {
+    mins = parseInt(mins) || 0;
+    if (mins <= 0) return 0; // 0 = disabled (never spindown)
+    if (mins <= 20) return Math.min(240, mins * 12); // 1..240 (multiples of 5 sec)
+    if (mins <= 30) return 241; // 30 minutes
+    if (mins <= 60) return 242; // 1 hour
+    if (mins <= 120) return 244; // 2 hours
+    if (mins <= 180) return 246; // 3 hours
+    if (mins <= 240) return 248; // 4 hours
+    if (mins <= 300) return 250; // 5 hours
+    return 252; // max (5.5h)
+}
+
+async function getDiskPowerStates() {
+    const states = {};
+    try {
+        const { stdout } = await execPromise('sudo hdparm -C /dev/sd[a-z] 2>/dev/null || true');
+        let currentDev = '';
+        for (let line of stdout.split('\n')) {
+            const devMatch = line.match(/\/dev\/([a-z0-9]+):/);
+            if (devMatch) {
+                currentDev = devMatch[1];
+                continue;
+            }
+            if (currentDev && line.includes('drive state is:')) {
+                const parts = line.split(':');
+                const st = (parts[1] || '').trim();
+                states[currentDev] = st; // 'active/idle', 'standby', 'sleeping', or 'unknown'
+            }
+        }
+    } catch (e) {}
+    return states;
+}
+
+async function applyDiskSpindownSettings(cfg) {
+    const config = cfg || readSpindownConfig();
+    const globalTimeoutCode = minutesToHdparmTimeoutCode(config.globalTimeout);
+    const globalApm = parseInt(config.globalApm) || 127;
+
+    try {
+        const { stdout } = await execPromise('lsblk -d -n -o NAME,ROTA 2>/dev/null || true');
+        for (let line of stdout.trim().split('\n')) {
+            const [name, rota] = line.trim().split(/\s+/);
+            if (!name || name.startsWith('loop') || name.startsWith('ram')) continue;
+            // Only apply to rotational mechanical drives (rota === '1') or explicitly configured disks
+            if (rota !== '1') continue;
+
+            const diskCfg = config.disks && config.disks[name] ? config.disks[name] : null;
+            let timeoutCode = globalTimeoutCode;
+            let apmVal = globalApm;
+
+            if (diskCfg) {
+                if (diskCfg.enabled === false) {
+                    timeoutCode = 0; // disable spindown for this disk
+                } else if (diskCfg.timeout !== undefined && diskCfg.timeout !== null) {
+                    timeoutCode = minutesToHdparmTimeoutCode(diskCfg.timeout);
+                }
+                if (diskCfg.apm) {
+                    apmVal = parseInt(diskCfg.apm);
+                }
+            }
+
+            let cmd = `sudo hdparm -S ${timeoutCode}`;
+            if (apmVal > 0) {
+                cmd += ` -B ${apmVal}`;
+            }
+            cmd += ` /dev/${name} 2>/dev/null || true`;
+            await execPromise(cmd);
+        }
+    } catch (e) {
+        console.error('Error applying spindown settings:', e.message);
+    }
+}
+
 app.get('/api/system/disks', async (req, res) => {
     try {
         const { stdout } = await execPromise('lsblk --json -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,ROTA,SERIAL');
         const data = JSON.parse(stdout);
         const blockdevices = data.blockdevices || [];
         const hwmonTemps = getDiskTemperaturesFromSysfs();
+        const powerStates = await getDiskPowerStates();
         
         for (let disk of blockdevices) {
             await markAccurateSystemFlags(disk);
             if (disk.type === 'disk') {
+                const isRotational = disk.rota === '1' || disk.rota === 1 || disk.rota === true;
+                disk.powerState = isRotational ? (powerStates[disk.name] || 'active/idle') : 'ssd';
                 let diskTemp = hwmonTemps[disk.name] !== undefined ? hwmonTemps[disk.name] : null;
+
                 try {
-                    const { stdout: smartOut } = await execPromise(`sudo smartctl -i -A /dev/${disk.name} 2>/dev/null || true`);
+                    // Use -n standby to avoid waking up sleeping drives
+                    const { stdout: smartOut } = await execPromise(`sudo smartctl -n standby -i -A /dev/${disk.name} 2>/dev/null || true`);
+                    const inStandby = smartOut.includes('STANDBY mode') || disk.powerState === 'standby' || disk.powerState === 'sleeping';
                     
                     let badSectors = 0;
                     let powerHours = 0;
-                    let isSsd = smartOut.includes('Solid State') || smartOut.includes('SSD') || smartOut.includes('NVMe') || disk.rota === false || disk.rota === 0;
+                    let isSsd = smartOut.includes('Solid State') || smartOut.includes('SSD') || smartOut.includes('NVMe') || disk.rota === false || disk.rota === 0 || disk.rota === '0';
                     
+                    if (isSsd) disk.powerState = 'ssd';
+
                     for (let line of smartOut.split('\n')) {
                         const parts = line.trim().split(/\s+/);
                         if (parts.length >= 10) {
@@ -3091,6 +3201,80 @@ app.get('/api/system/disks', async (req, res) => {
             }
         }
         res.json({ success: true, data: blockdevices });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/system/spindown', async (req, res) => {
+    try {
+        const config = readSpindownConfig();
+        const powerStates = await getDiskPowerStates();
+        res.json({ success: true, config, powerStates });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/system/spindown/apply', async (req, res) => {
+    try {
+        const newConfig = req.body;
+        if (!newConfig) return res.status(400).json({ success: false, error: '缺少配置数据' });
+        saveSpindownConfig(newConfig);
+        await applyDiskSpindownSettings(newConfig);
+        res.json({ success: true, message: '硬盘休眠策略已成功保存并立即生效' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/system/spindown/trigger', async (req, res) => {
+    try {
+        const { device } = req.body;
+        if (!device) return res.status(400).json({ success: false, error: '缺少目标设备' });
+
+        if (device === 'all') {
+            const { stdout } = await execPromise('lsblk -d -n -o NAME,ROTA 2>/dev/null || true');
+            const hddList = [];
+            for (let line of stdout.trim().split('\n')) {
+                const [name, rota] = line.trim().split(/\s+/);
+                if (name && rota === '1' && !name.startsWith('loop')) {
+                    hddList.push(name);
+                    await execPromise(`sudo hdparm -y /dev/${name} 2>/dev/null || true`);
+                }
+            }
+            return res.json({ success: true, message: `已成功向全部 ${hddList.length} 块机械硬盘发送立即停转休眠指令 (${hddList.join(', ')})` });
+        } else {
+            const cleanDev = device.replace('/dev/', '');
+            await execPromise(`sudo hdparm -y /dev/${cleanDev}`);
+            return res.json({ success: true, message: `已成功向 /dev/${cleanDev} 发送立即停转休眠指令` });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/system/spindown/wakeup', async (req, res) => {
+    try {
+        const { device } = req.body;
+        if (!device) return res.status(400).json({ success: false, error: '缺少目标设备' });
+
+        if (device === 'all') {
+            const { stdout } = await execPromise('lsblk -d -n -o NAME,ROTA 2>/dev/null || true');
+            const hddList = [];
+            for (let line of stdout.trim().split('\n')) {
+                const [name, rota] = line.trim().split(/\s+/);
+                if (name && rota === '1' && !name.startsWith('loop')) {
+                    hddList.push(name);
+                    await execPromise(`sudo dd if=/dev/${name} of=/dev/null count=1 bs=512 status=none 2>/dev/null || true`);
+                }
+            }
+            return res.json({ success: true, message: `已成功唤醒全部 ${hddList.length} 块机械硬盘` });
+        } else {
+            const cleanDev = device.replace('/dev/', '');
+            await execPromise(`sudo dd if=/dev/${cleanDev} of=/dev/null count=1 bs=512 status=none`);
+            return res.json({ success: true, message: `已成功唤醒 /dev/${cleanDev}` });
+        }
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -7591,6 +7775,9 @@ app.post('/api/websites/nginx/reload', async (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Network Monitor Admin Dashboard running on http://0.0.0.0:${PORT}`);
+    applyDiskSpindownSettings().catch(err => {
+        console.error('Initial spindown settings apply error:', err.message);
+    });
 });
 
 

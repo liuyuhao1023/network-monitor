@@ -1197,8 +1197,9 @@
                         <h2 style="margin:0; font-size:18px; font-weight:700;">存储控制台与网络共享</h2>
                         <p class="text-secondary" style="margin-top:4px; font-size:13px;">管理底层物理硬盘、RAID 存储阵列、挂载卷与网络共享目录 (SMB / NFS / FTP)</p>
                     </div>
-                    <div style="display:flex; gap:10px;">
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="showRaidCreateModal()"><i class="fa-solid fa-layer-group"></i> 新建存储空间 (RAID)</button>
+                        <button class="btn btn-secondary" onclick="showSpindownModal()"><i class="fa-solid fa-moon" style="color:#a855f7;"></i> 硬盘休眠与节能</button>
                         <button class="btn btn-secondary" onclick="fetchStorageAll()"><i class="fa-solid fa-rotate-right"></i> 刷新数据</button>
                     </div>
                 </div>
@@ -5337,6 +5338,96 @@ phpinfo\(</textarea>
         <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
             <button class="btn btn-secondary" onclick="closeModal('smbShareModal')">取消</button>
             <button class="btn btn-primary" onclick="submitSmbShare()"><i class="fa-solid fa-plus"></i> 创建共享</button>
+        </div>
+    </div>
+</div>
+
+<!-- 9. HDD Spindown & Energy Saving Modal -->
+<div class="modal-overlay" id="spindownModal" style="display:none;">
+    <div class="modal-box" style="width:780px; max-width:95vw;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-moon" style="color:#a855f7; margin-right:8px;"></i>硬盘休眠与节能管理 (HDD Spindown & APM)</h3>
+            <button class="modal-close" onclick="closeModal('spindownModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px; max-height:calc(85vh - 130px); overflow-y:auto;">
+            <!-- Top Summary & Quick Actions -->
+            <div style="background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.25); border-radius:10px; padding:14px 18px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div>
+                    <div style="font-weight:700; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                        <span>💤 实时节能状态</span>
+                        <span id="spindown-summary-badge" class="badge badge-purple" style="font-size:11px;">加载中...</span>
+                    </div>
+                    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:4px;">
+                        空闲停转可降低 70% 功耗并显著降温；收到 I/O 读写时磁盘将自动秒级唤醒旋转
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-secondary" onclick="triggerAllSpindown()" style="font-size:12px; border-color:rgba(168,85,247,0.4);"><i class="fa-solid fa-moon" style="color:#a855f7;"></i> 立即休眠全部机械盘</button>
+                    <button class="btn btn-sm btn-secondary" onclick="triggerAllWakeup()" style="font-size:12px;"><i class="fa-solid fa-bolt" style="color:var(--accent-orange);"></i> 唤醒全部</button>
+                    <button class="btn btn-sm btn-secondary" onclick="fetchSpindownStatus(true)" title="刷新实时状态"><i class="fa-solid fa-rotate-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Global Strategy Settings -->
+            <div class="card" style="padding:14px 16px; margin-bottom:18px; border:1px solid var(--border-color);">
+                <div style="font-weight:700; font-size:13px; margin-bottom:12px; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-sliders" style="color:var(--accent-blue);"></i> 全局默认休眠与电源管理策略
+                </div>
+                <div class="grid-2" style="gap:14px;">
+                    <div class="form-group">
+                        <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">默认空闲自动停转超时 (Global Spindown Timeout)</label>
+                        <select id="spindown-global-timeout" class="form-input" style="width:100%;">
+                            <option value="5">5 分钟 (频繁空闲短休眠)</option>
+                            <option value="10">10 分钟</option>
+                            <option value="15" selected>15 分钟 (推荐 - 节能与唤醒平衡)</option>
+                            <option value="20">20 分钟</option>
+                            <option value="30">30 分钟 (适合轻度 NAS 访问)</option>
+                            <option value="60">1 小时 (适合中重度存储)</option>
+                            <option value="120">2 小时</option>
+                            <option value="180">3 小时</option>
+                            <option value="0">从不休眠 (保持常开旋转)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display:block; margin-bottom:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">APM 高级电源管理级别 (Advanced Power Management)</label>
+                        <select id="spindown-global-apm" class="form-input" style="width:100%;">
+                            <option value="127" selected>127 - 启用节能且允许停转 (推荐)</option>
+                            <option value="1">1 - 最大节能 (最低功耗)</option>
+                            <option value="254">254 - 最大性能 (禁用降速节能)</option>
+                            <option value="0">0 / 255 - 彻底关闭 APM 管理</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Per-Disk Configuration Table -->
+            <div style="font-weight:700; font-size:13px; margin-bottom:8px; color:var(--text-primary); display:flex; justify-content:space-between; align-items:center;">
+                <span><i class="fa-solid fa-hard-drive" style="color:var(--accent-green); margin-right:6px;"></i> 各物理磁盘独立休眠策略与状态</span>
+            </div>
+            <div style="border:1px solid var(--border-color); border-radius:8px; overflow:hidden; margin-bottom:12px; background:rgba(0,0,0,0.1);">
+                <table class="table" style="width:100%; border-collapse:collapse; font-size:12px; margin:0;">
+                    <thead>
+                        <tr style="background:rgba(255,255,255,0.03); border-bottom:1px solid var(--border-color); text-align:left;">
+                            <th style="padding:10px 12px; font-weight:600; color:var(--text-secondary);">设备</th>
+                            <th style="padding:10px 12px; font-weight:600; color:var(--text-secondary);">介质/型号</th>
+                            <th style="padding:10px 12px; font-weight:600; color:var(--text-secondary);">当前供电状态</th>
+                            <th style="padding:10px 12px; font-weight:600; color:var(--text-secondary);">独立休眠策略</th>
+                            <th style="padding:10px 12px; font-weight:600; color:var(--text-secondary); text-align:right;">即时操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="spindown-disks-tbody">
+                        <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);">加载磁盘中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p style="font-size:11px; color:var(--text-secondary); margin:0; line-height:1.5;">
+                💡 <strong>提示</strong>：固态硬盘 (SSD/NVMe) 无机械电机，功耗极低无需设置停转；系统盘 (含 /boot 或 / 挂载点) 因系统日志与后台轮询常有微量 I/O，建议保持默认或设为较长超时。
+            </p>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" onclick="closeModal('spindownModal')">取消</button>
+            <button class="btn btn-primary" id="btn-save-spindown" onclick="saveSpindownConfig()"><i class="fa-solid fa-floppy-disk"></i> 保存并应用休眠策略</button>
         </div>
     </div>
 </div>
