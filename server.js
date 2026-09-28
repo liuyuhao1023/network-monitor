@@ -3148,7 +3148,7 @@ app.get('/api/system/raids', async (req, res) => {
                 }
 
                 // Check friendly name from symlinks in /dev/md/
-                let friendlyName = name;
+                let friendlyName = '';
                 try {
                     if (fs.existsSync('/dev/md')) {
                         const links = fs.readdirSync('/dev/md');
@@ -3156,7 +3156,7 @@ app.get('/api/system/raids', async (req, res) => {
                             try {
                                 const real = fs.realpathSync(`/dev/md/${l}`);
                                 if (real === arrayDevice) {
-                                    friendlyName = l;
+                                    friendlyName = l.includes(':') ? l.split(':')[1] : l;
                                     break;
                                 }
                             } catch(e) {}
@@ -3166,7 +3166,7 @@ app.get('/api/system/raids', async (req, res) => {
 
                 const raidInfo = {
                     device: arrayDevice,
-                    name: friendlyName,
+                    name: friendlyName || name,
                     level: 'Unknown',
                     size: 'Unknown',
                     state: 'Unknown',
@@ -3187,10 +3187,14 @@ app.get('/api/system/raids', async (req, res) => {
                 for (let dLine of detail.split('\n')) {
                     dLine = dLine.trim();
                     if (dLine.startsWith('Name :')) {
-                        const rawName = dLine.split(':')[1]?.trim() || '';
-                        if (rawName && (!friendlyName || friendlyName === name)) {
-                            const short = rawName.includes(':') ? rawName.split(':')[1] : rawName;
-                            if (short) raidInfo.name = short;
+                        const colonIdx = dLine.indexOf(':');
+                        const afterColon = dLine.substring(colonIdx + 1).trim();
+                        const nameToken = afterColon.split(/\s+/)[0];
+                        if (nameToken) {
+                            const customPart = nameToken.includes(':') ? nameToken.split(':')[1] : nameToken;
+                            if (customPart && !friendlyName) {
+                                raidInfo.name = customPart;
+                            }
                         }
                     }
                     if (dLine.startsWith('Raid Level :')) raidInfo.level = dLine.split(':')[1].trim().toUpperCase();
@@ -3303,8 +3307,8 @@ app.post('/api/system/raid/create', async (req, res) => {
         if (!level || !devices || !devices.length) return res.status(400).json({ success: false, error: '参数不完整' });
         
         let customName = (name || '').trim();
-        // sanitize customName: allow letters, numbers, _, -
-        customName = customName.replace(/[^a-zA-Z0-9_\-]/g, '');
+        // sanitize customName: allow Chinese, English letters, numbers, _, -
+        customName = customName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9_\-]/g, '');
 
         let mdDevice = '';
         if (customName && /^md\d+$/.test(customName)) {
@@ -3320,7 +3324,7 @@ app.post('/api/system/raid/create', async (req, res) => {
         if (!mdDevice) mdDevice = '/dev/md0';
         
         const devicePaths = devices.map(d => `/dev/${d.replace(/^\/dev\//, '')}`).join(' ');
-        const nameArg = customName ? `--name=${customName}` : '';
+        const nameArg = customName ? `--name="${customName}"` : '';
         const cmd = `sudo mdadm --create --verbose ${mdDevice} ${nameArg} --level=${level} --raid-devices=${devices.length} ${devicePaths} --run`;
         const { stdout, stderr } = await execPromise(cmd);
         res.json({ success: true, mdDevice, output: stdout + stderr });
