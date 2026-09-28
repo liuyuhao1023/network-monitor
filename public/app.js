@@ -2508,6 +2508,203 @@ function toggleDiskDrawer(diskName) {
     }
 }
 
+let cachedDisksData = null;
+let currentDiskCols = 0;
+
+function renderDisksLayout(disksList) {
+    const container = document.getElementById('disks-grid-container');
+    if (!container) return;
+
+    if (!disksList || disksList.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px; width:100%;">未检测到物理磁盘</div>';
+        return;
+    }
+
+    const validDisks = disksList.filter(d => d.type === 'disk');
+    if (validDisks.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px; width:100%;">未检测到物理磁盘</div>';
+        return;
+    }
+
+    let numCols = 3;
+    if (window.innerWidth <= 768) {
+        numCols = 1;
+    } else if (window.innerWidth <= 1200) {
+        numCols = 2;
+    }
+    currentDiskCols = numCols;
+
+    const colCards = Array.from({ length: numCols }, () => []);
+    availableDisksForRaid = [];
+
+    validDisks.forEach((d, idx) => {
+        // Collect all child partition mount points & info
+        let hasSys = false;
+        let mountsList = [];
+        
+        function collectPartitionInfo(part) {
+            if (part.mountpoint) {
+                mountsList.push({ name: part.name, mount: part.mountpoint, size: part.size, fstype: part.fstype });
+                if (part.mountpoint === '/' || part.mountpoint === '/boot') hasSys = true;
+            }
+            if (part.children) part.children.forEach(collectPartitionInfo);
+        }
+
+        if (d.children) d.children.forEach(collectPartitionInfo);
+        if (d.mountpoint) mountsList.push({ name: d.name, mount: d.mountpoint, size: d.size, fstype: d.fstype });
+
+        d._hasSystem = hasSys;
+        d._mounts = mountsList;
+
+        let actions = '';
+        if (d._hasSystem) {
+            actions = '<span class="badge badge-danger" style="background:rgba(239,68,68,0.15); color:var(--accent-danger);">OS 系统保护</span>';
+        } else if (d._mounts.length > 0) {
+            actions = `<button class="btn btn-sm btn-warning" onclick="unmountDisk('${d.name}')">卸载</button>`;
+        } else {
+            availableDisksForRaid.push(d);
+            actions = `
+                <button class="btn btn-sm btn-secondary" onclick="showMountModal('${d.name}')">挂载</button>
+                <button class="btn btn-sm btn-danger" onclick="showFormatModal('${d.name}')">格式化</button>
+            `;
+        }
+
+        let sizeStr = d.size || '未知';
+        let isSsd = d._smart ? d._smart.isSsd : (d.rota === '0' || d.rota === 0 || (d.model && (d.model.toLowerCase().includes('ssd') || d.model.toLowerCase().includes('nvme'))));
+        let typeBadge = isSsd 
+            ? '<span class="disk-type-pill ssd">[SSD]</span>' 
+            : '<span class="disk-type-pill hdd">[HDD]</span>';
+        let osBadge = d._hasSystem ? '<span class="disk-os-pill">OS 系统</span>' : '';
+        let raidBadge = (d.fstype === 'linux_raid_member' || (d.children && d.children.some(c => c.fstype === 'linux_raid_member' || c.type === 'raid0' || c.type === 'raid1' || c.type === 'raid5')))
+            ? '<span class="badge badge-primary" style="font-size:11px; padding:2px 6px;">RAID 成员</span>'
+            : '';
+
+        let tempVal = (d.temperature !== null && d.temperature !== undefined) ? d.temperature : (d._smart && d._smart.temperature !== null && d._smart.temperature !== undefined ? d._smart.temperature : null);
+        let tempBadge = '';
+        let tempDetailStr = 'N/A';
+        let tempColor = 'var(--text-secondary)';
+        if (tempVal !== null && !isNaN(tempVal)) {
+            let tempLevel = tempVal >= 55 ? 'hot' : (tempVal >= 45 ? 'warm' : 'cool');
+            tempColor = tempVal >= 55 ? 'var(--accent-danger)' : (tempVal >= 45 ? 'var(--accent-orange)' : 'var(--accent-green)');
+            tempBadge = `<span class="disk-temp-pill ${tempLevel}" title="硬盘当前工作温度: ${tempVal}°C"><i class="fa-solid fa-temperature-half" style="font-size:10px;"></i>${tempVal}°C</span>`;
+            tempDetailStr = `${tempVal}°C`;
+        }
+
+        let badSectors = d._smart ? d._smart.badSectors : 0;
+        let powerHours = d._smart ? d._smart.powerHours : 0;
+        let healthPct = d._smart ? d._smart.healthPct : 100;
+
+        let healthBadge = '';
+        if (badSectors > 0) {
+            healthBadge = `<span class="disk-health-pill warn">⚠️ 坏道 ${badSectors} 块</span>`;
+        } else if (isSsd) {
+            healthBadge = `<span class="disk-health-pill ok">✔ 良好 (寿命 100%)</span>`;
+        } else {
+            healthBadge = `<span class="disk-health-pill ok">✔ 良好 (健康度 ${healthPct}%)</span>`;
+        }
+
+        let mountDrawerHtml = '';
+        if (d._mounts.length > 0) {
+            mountDrawerHtml = d._mounts.map(m => `<div class="disk-mount-bar"><i class="fa-solid fa-link"></i> 挂载点: <strong>${m.mount}</strong> (${m.size || ''})</div>`).join('');
+        } else {
+            mountDrawerHtml = '<div style="font-size:12px; color:var(--text-secondary); padding:4px 0;">未挂载分区</div>';
+        }
+
+        let smartDetailHtml = `
+            <div class="smart-detail-bar">
+                <span>介质: <strong style="color:${isSsd ? 'var(--accent-green)' : 'var(--accent-blue)'};">${isSsd ? '固态 (SSD)' : '机械 (HDD)'}</strong></span>
+                <span>实时温度: <strong style="color:${tempColor};">${tempDetailStr}</strong></span>
+                <span>物理坏道: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${badSectors} 块</strong></span>
+                <span>通电: <strong>${powerHours} 小时</strong></span>
+                <span>健康: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${isSsd ? '100% 满血' : healthPct + '%'}</strong></span>
+            </div>
+        `;
+
+        const cardHtml = `
+            <div class="disk-card-screenshot-style">
+                <!-- TOP HALF: STACKED ECG DYNAMIC WAVEFORM CHART -->
+                <div class="disk-chart-top">
+                    <div class="chart-readout-row">
+                        <span>读取 <strong id="${d.name}-read-val" style="color:#818cf8;">0.00 MB/s</strong></span>
+                        <span>写入 <strong id="${d.name}-write-val" style="color:#38bdf8;">0.00 MB/s</strong></span>
+                    </div>
+                    <div class="sparkline-wrap">
+                        <canvas id="${d.name}-chart" class="disk-sparkline-canvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="disk-card-middle-line"></div>
+
+                <!-- BOTTOM HALF: DISK INFO -->
+                <div class="disk-info-bottom-row">
+                    <div class="disk-left-details">
+                        <div class="disk-icon-box">
+                            ${isSsd ? '⚡' : '💽'}
+                        </div>
+                        <div class="disk-text-stack">
+                            <div class="disk-name-headline" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <span class="disk-name-bold">/dev/${d.name}</span>
+                                ${typeBadge}
+                                ${tempBadge}
+                                ${osBadge}
+                                ${raidBadge}
+                            </div>
+                            <div class="disk-sub-meta">
+                                ${d.model || 'Generic Storage'} | ${sizeStr} ${d.serial ? '· SN: ' + d.serial : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="disk-right-actions">
+                        ${healthBadge}
+                        <button class="drawer-toggle-btn" onclick="toggleDiskDrawer('${d.name}')" title="展开/收起详情">
+                            <i class="fa-solid fa-chevron-down" id="${d.name}-chevron" style="transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); font-size:12px;"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- EXPANDABLE ACTION DRAWER -->
+                <div class="disk-action-drawer-wrapper" id="${d.name}-drawer-wrapper">
+                    <div class="disk-action-drawer-inner">
+                        ${smartDetailHtml}
+                        ${mountDrawerHtml}
+                        <div class="drawer-btns">
+                            <button class="btn btn-sm btn-secondary" onclick="checkSmart('${d.name}')">SMART 健康检测</button>
+                            ${actions}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        colCards[idx % numCols].push(cardHtml);
+    });
+
+    container.innerHTML = colCards.map((cards, colIdx) => `
+        <div class="disk-col" id="disk-col-${colIdx}">
+            ${cards.join('')}
+        </div>
+    `).join('');
+
+    // Trigger initial chart draw for each canvas
+    setTimeout(() => {
+        validDisks.forEach(d => {
+            drawDiskSparkline(d.name);
+        });
+    }, 100);
+
+    const kpiDiskCount = document.getElementById('kpi-disk-count');
+    if (kpiDiskCount) kpiDiskCount.textContent = validDisks.length;
+}
+
+window.addEventListener('resize', () => {
+    if (!cachedDisksData) return;
+    const newCols = window.innerWidth <= 768 ? 1 : (window.innerWidth <= 1200 ? 2 : 3);
+    if (newCols !== currentDiskCols) {
+        renderDisksLayout(cachedDisksData);
+    }
+});
+
 async function fetchPhysicalDisks() {
     try {
         const res = await apiFetch('/api/system/disks');
@@ -2519,174 +2716,9 @@ async function fetchPhysicalDisks() {
             container.innerHTML = `<div style="color:var(--accent-danger); padding:20px; text-align:center;">获取物理磁盘失败: ${data.error}</div>`;
             return;
         }
-        
-        let html = '';
-        availableDisksForRaid = []; // Reset
-        let diskCount = 0;
 
-        const disksList = data.data || [];
-        
-        disksList.forEach(d => {
-            // ONLY process top-level physical drives (d.type === 'disk')
-            if (d.type !== 'disk') return;
-
-            diskCount++;
-            
-            // Collect all child partition mount points & info
-            let hasSys = false;
-            let mountsList = [];
-            
-            function collectPartitionInfo(part) {
-                if (part.mountpoint) {
-                    mountsList.push({ name: part.name, mount: part.mountpoint, size: part.size, fstype: part.fstype });
-                    if (part.mountpoint === '/' || part.mountpoint === '/boot') hasSys = true;
-                }
-                if (part.children) part.children.forEach(collectPartitionInfo);
-            }
-
-            if (d.children) d.children.forEach(collectPartitionInfo);
-            if (d.mountpoint) mountsList.push({ name: d.name, mount: d.mountpoint, size: d.size, fstype: d.fstype });
-
-            d._hasSystem = hasSys;
-            d._mounts = mountsList;
-
-            let actions = '';
-            if (d._hasSystem) {
-                actions = '<span class="badge badge-danger" style="background:rgba(239,68,68,0.15); color:var(--accent-danger);">OS 系统保护</span>';
-            } else if (d._mounts.length > 0) {
-                actions = `<button class="btn btn-sm btn-warning" onclick="unmountDisk('${d.name}')">卸载</button>`;
-            } else {
-                availableDisksForRaid.push(d);
-                actions = `
-                    <button class="btn btn-sm btn-secondary" onclick="showMountModal('${d.name}')">挂载</button>
-                    <button class="btn btn-sm btn-danger" onclick="showFormatModal('${d.name}')">格式化</button>
-                `;
-            }
-
-            let sizeStr = d.size || '未知';
-            let isSsd = d._smart ? d._smart.isSsd : (d.rota === '0' || d.rota === 0 || (d.model && (d.model.toLowerCase().includes('ssd') || d.model.toLowerCase().includes('nvme'))));
-            let typeBadge = isSsd 
-                ? '<span class="disk-type-pill ssd">[SSD]</span>' 
-                : '<span class="disk-type-pill hdd">[HDD]</span>';
-            let osBadge = d._hasSystem ? '<span class="disk-os-pill">OS 系统</span>' : '';
-            let raidBadge = (d.fstype === 'linux_raid_member' || (d.children && d.children.some(c => c.fstype === 'linux_raid_member' || c.type === 'raid0' || c.type === 'raid1' || c.type === 'raid5')))
-                ? '<span class="badge badge-primary" style="font-size:11px; padding:2px 6px;">RAID 成员</span>'
-                : '';
-
-            let tempVal = (d.temperature !== null && d.temperature !== undefined) ? d.temperature : (d._smart && d._smart.temperature !== null && d._smart.temperature !== undefined ? d._smart.temperature : null);
-            let tempBadge = '';
-            let tempDetailStr = 'N/A';
-            let tempColor = 'var(--text-secondary)';
-            if (tempVal !== null && !isNaN(tempVal)) {
-                let tempLevel = tempVal >= 55 ? 'hot' : (tempVal >= 45 ? 'warm' : 'cool');
-                tempColor = tempVal >= 55 ? 'var(--accent-danger)' : (tempVal >= 45 ? 'var(--accent-orange)' : 'var(--accent-green)');
-                tempBadge = `<span class="disk-temp-pill ${tempLevel}" title="硬盘当前工作温度: ${tempVal}°C"><i class="fa-solid fa-temperature-half" style="font-size:10px;"></i>${tempVal}°C</span>`;
-                tempDetailStr = `${tempVal}°C`;
-            }
-
-            let badSectors = d._smart ? d._smart.badSectors : 0;
-            let powerHours = d._smart ? d._smart.powerHours : 0;
-            let healthPct = d._smart ? d._smart.healthPct : 100;
-
-            let healthBadge = '';
-            if (badSectors > 0) {
-                healthBadge = `<span class="disk-health-pill warn">⚠️ 坏道 ${badSectors} 块</span>`;
-            } else if (isSsd) {
-                healthBadge = `<span class="disk-health-pill ok">✔ 良好 (寿命 100%)</span>`;
-            } else {
-                healthBadge = `<span class="disk-health-pill ok">✔ 良好 (健康度 ${healthPct}%)</span>`;
-            }
-
-            let mountDrawerHtml = '';
-            if (d._mounts.length > 0) {
-                mountDrawerHtml = d._mounts.map(m => `<div class="disk-mount-bar"><i class="fa-solid fa-link"></i> 挂载点: <strong>${m.mount}</strong> (${m.size || ''})</div>`).join('');
-            } else {
-                mountDrawerHtml = '<div style="font-size:12px; color:var(--text-secondary); padding:4px 0;">未挂载分区</div>';
-            }
-
-            let smartDetailHtml = `
-                <div class="smart-detail-bar">
-                    <span>介质: <strong style="color:${isSsd ? 'var(--accent-green)' : 'var(--accent-blue)'};">${isSsd ? '固态 (SSD)' : '机械 (HDD)'}</strong></span>
-                    <span>实时温度: <strong style="color:${tempColor};">${tempDetailStr}</strong></span>
-                    <span>物理坏道: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${badSectors} 块</strong></span>
-                    <span>通电: <strong>${powerHours} 小时</strong></span>
-                    <span>健康: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${isSsd ? '100% 满血' : healthPct + '%'}</strong></span>
-                </div>
-            `;
-
-            html += `
-                <div class="disk-card-screenshot-style">
-                    <!-- TOP HALF: STACKED ECG DYNAMIC WAVEFORM CHART -->
-                    <div class="disk-chart-top">
-                        <div class="chart-readout-row">
-                            <span>读取 <strong id="${d.name}-read-val" style="color:#818cf8;">0.00 MB/s</strong></span>
-                            <span>写入 <strong id="${d.name}-write-val" style="color:#38bdf8;">0.00 MB/s</strong></span>
-                        </div>
-                        <div class="sparkline-wrap">
-                            <canvas id="${d.name}-chart" class="disk-sparkline-canvas"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="disk-card-middle-line"></div>
-
-                    <!-- BOTTOM HALF: DISK INFO -->
-                    <div class="disk-info-bottom-row">
-                        <div class="disk-left-details">
-                            <div class="disk-icon-box">
-                                ${isSsd ? '⚡' : '💽'}
-                            </div>
-                            <div class="disk-text-stack">
-                                <div class="disk-name-headline" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                                    <span class="disk-name-bold">/dev/${d.name}</span>
-                                    ${typeBadge}
-                                    ${tempBadge}
-                                    ${osBadge}
-                                    ${raidBadge}
-                                </div>
-                                <div class="disk-sub-meta">
-                                    ${d.model || 'Generic Storage'} | ${sizeStr} ${d.serial ? '· SN: ' + d.serial : ''}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="disk-right-actions">
-                            ${healthBadge}
-                            <button class="drawer-toggle-btn" onclick="toggleDiskDrawer('${d.name}')" title="展开/收起详情">
-                                <i class="fa-solid fa-chevron-down" id="${d.name}-chevron" style="transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); font-size:12px;"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- EXPANDABLE ACTION DRAWER -->
-                    <div class="disk-action-drawer-wrapper" id="${d.name}-drawer-wrapper">
-                        <div class="disk-action-drawer-inner">
-                            ${smartDetailHtml}
-                            ${mountDrawerHtml}
-                            <div class="drawer-btns">
-                                <button class="btn btn-sm btn-secondary" onclick="checkSmart('${d.name}')">SMART 健康检测</button>
-                                ${actions}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        
-        if (disksList.length === 0) {
-            container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px;">未检测到物理磁盘</div>';
-        } else {
-            container.innerHTML = html;
-
-            // Trigger initial chart draw for each canvas
-            setTimeout(() => {
-                disksList.forEach(d => {
-                    if (d.type === 'disk') drawDiskSparkline(d.name);
-                });
-            }, 100);
-        }
-
-        const kpiDiskCount = document.getElementById('kpi-disk-count');
-        if (kpiDiskCount) kpiDiskCount.textContent = diskCount;
+        cachedDisksData = data.data || [];
+        renderDisksLayout(cachedDisksData);
     } catch (e) {
         const container = document.getElementById('disks-grid-container');
         if (container) container.innerHTML = `<div style="color:var(--accent-danger); padding:20px; text-align:center;">网络错误: ${e.message}</div>`;

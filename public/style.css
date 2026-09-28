@@ -1056,21 +1056,18 @@ code {
 
 /* ── Modern Storage UI Components ────────────────────────────────────────── */
 #disks-grid-container {
-    display: block;
-    columns: 3 320px;
-    column-gap: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    width: 100%;
 }
 
-@media (max-width: 1200px) {
-    #disks-grid-container {
-        columns: 2 280px;
-    }
-}
-
-@media (max-width: 768px) {
-    #disks-grid-container {
-        columns: 1;
-    }
+.disk-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .disk-card-screenshot-style {
@@ -1083,10 +1080,6 @@ code {
     gap: 8px;
     transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-    page-break-inside: avoid;
-    margin-bottom: 16px;
     width: 100%;
     box-sizing: border-box;
 }
