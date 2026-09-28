@@ -2863,6 +2863,8 @@ async function unmountDisk(device) {
 }
 
 function showRaidCreateModal() {
+    const nameInput = document.getElementById('raid-name-input');
+    if (nameInput) nameInput.value = '';
     const cbContainer = document.getElementById('raid-disk-checkboxes');
     if (availableDisksForRaid.length === 0) {
         cbContainer.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:20px;">未发现可用于组建 RAID 的空闲磁盘 (必须未格式化、未挂载且非系统盘)</div>';
@@ -2879,11 +2881,13 @@ function showRaidCreateModal() {
 }
 
 async function submitRaidCreate() {
+    const name = document.getElementById('raid-name-input')?.value?.trim() || '';
     const level = document.getElementById('raid-level-select').value;
     const cbs = document.querySelectorAll('.raid-disk-cb:checked');
     const devices = Array.from(cbs).map(cb => cb.value);
     
     if (devices.length === 0) return alert('请至少选择一块磁盘');
+    if (level === '0' && devices.length < 2) return alert('RAID 0 至少需要 2 块磁盘');
     if (level === '1' && devices.length < 2) return alert('RAID 1 至少需要 2 块磁盘');
     if (level === '5' && devices.length < 3) return alert('RAID 5 至少需要 3 块磁盘');
     if (level === '10' && devices.length < 4) return alert('RAID 10 至少需要 4 块磁盘');
@@ -2893,17 +2897,17 @@ async function submitRaidCreate() {
         const res = await apiFetch('/api/system/raid/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ level, devices })
+            body: JSON.stringify({ name, level, devices })
         });
         const data = await res.json();
         if (data.success) {
-            alert('RAID 阵列创建成功！');
+            alert(`RAID 阵列创建成功！\n${data.output || ''}`);
             fetchStorageAll();
         } else {
             alert(`创建失败: ${data.error}`);
         }
     } catch (e) {
-        alert('网络错误');
+        alert('网络错误: ' + e.message);
     }
 }
 

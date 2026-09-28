@@ -1119,16 +1119,19 @@
                             <button class="btn-icon" onclick="document.getElementById('raidCreateModal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                         <div class="modal-body" style="padding:20px;">
-                            <label style="display:block; margin-bottom:8px; color:var(--text-secondary);">RAID 级别</label>
-                            <select id="raid-level-select" class="form-input" style="width:100%; margin-bottom:20px;">
-                                <option value="0">RAID 0 (条带化 - 高速无冗余)</option>
-                                <option value="1">RAID 1 (镜像 - 高冗余)</option>
-                                <option value="5">RAID 5 (奇偶校验 - 平衡)</option>
-                                <option value="10">RAID 10 (条带+镜像 - 高性能高冗余)</option>
+                            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:13px;">阵列自定义名称 (可选)</label>
+                            <input type="text" id="raid-name-input" class="form-input" placeholder="例如: data_pool / storage0 / md0 (默认自动生成)" style="width:100%; margin-bottom:16px;">
+
+                            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:13px;">RAID 级别</label>
+                            <select id="raid-level-select" class="form-input" style="width:100%; margin-bottom:16px;">
+                                <option value="0">RAID 0 (条带化 - 高速无冗余，最少 2 块盘)</option>
+                                <option value="1">RAID 1 (镜像 - 高冗余，最少 2 块盘)</option>
+                                <option value="5">RAID 5 (奇偶校验 - 平衡，最少 3 块盘)</option>
+                                <option value="10">RAID 10 (条带+镜像 - 高性能高冗余，最少 4 块盘)</option>
                             </select>
                             
-                            <label style="display:block; margin-bottom:8px; color:var(--text-secondary);">选择磁盘 (勾选多项)</label>
-                            <div id="raid-disk-checkboxes" style="background:rgba(0,0,0,0.2); border:1px solid var(--border-color); border-radius:8px; padding:10px; max-height:200px; overflow-y:auto; margin-bottom:20px;">
+                            <label style="display:block; margin-bottom:6px; color:var(--text-secondary); font-size:13px;">选择物理磁盘 (勾选多项)</label>
+                            <div id="raid-disk-checkboxes" style="background:rgba(0,0,0,0.2); border:1px solid var(--border-color); border-radius:8px; padding:10px; max-height:200px; overflow-y:auto; margin-bottom:10px;">
                                 <!-- Checkboxes populated via JS -->
                             </div>
                         </div>

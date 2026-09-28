@@ -3302,19 +3302,28 @@ app.post('/api/system/raid/create', async (req, res) => {
         const { level, devices, name } = req.body;
         if (!level || !devices || !devices.length) return res.status(400).json({ success: false, error: '参数不完整' });
         
-        let mdDevice = '/dev/md0';
-        for (let i = 0; i < 10; i++) {
-            if (!fs.existsSync(`/dev/md${i}`)) {
-                mdDevice = `/dev/md${i}`;
-                break;
+        let customName = (name || '').trim();
+        // sanitize customName: allow letters, numbers, _, -
+        customName = customName.replace(/[^a-zA-Z0-9_\-]/g, '');
+
+        let mdDevice = '';
+        if (customName && /^md\d+$/.test(customName)) {
+            mdDevice = `/dev/${customName}`;
+        } else {
+            for (let i = 0; i < 20; i++) {
+                if (!fs.existsSync(`/dev/md${i}`)) {
+                    mdDevice = `/dev/md${i}`;
+                    break;
+                }
             }
         }
+        if (!mdDevice) mdDevice = '/dev/md0';
         
-        const devicePaths = devices.map(d => `/dev/${d}`).join(' ');
-        const nameArg = name ? `--name=${name}` : '';
+        const devicePaths = devices.map(d => `/dev/${d.replace(/^\/dev\//, '')}`).join(' ');
+        const nameArg = customName ? `--name=${customName}` : '';
         const cmd = `sudo mdadm --create --verbose ${mdDevice} ${nameArg} --level=${level} --raid-devices=${devices.length} ${devicePaths} --run`;
         const { stdout, stderr } = await execPromise(cmd);
-        res.json({ success: true, output: stdout + stderr });
+        res.json({ success: true, mdDevice, output: stdout + stderr });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
