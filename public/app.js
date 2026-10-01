@@ -1971,10 +1971,20 @@ function escHtml(str) {
 }
 
 function fmtKB(kb) {
-    if (!kb || kb === 0) return '0 KB';
-    if (kb < 1024) return `${kb} KB`;
-    if (kb < 1048576) return `${(kb / 1024).toFixed(1)} MB`;
-    return `${(kb / 1048576).toFixed(2)} GB`;
+    if (!kb || kb <= 0) return '0 KB';
+    const num = Number(kb);
+    if (num < 1024) return `${Math.round(num)} KB`;
+    if (num < 1048576) return `${(num / 1024).toFixed(1)} MB`;
+    if (num < 1073741824) return `${(num / 1048576).toFixed(2)} GB`;
+    return `${(num / 1073741824).toFixed(2)} TB`;
+}
+
+function fmtMB(mb) {
+    if (mb === undefined || mb === null || isNaN(mb) || mb <= 0) return '0.0 MB';
+    const num = Number(mb);
+    if (num >= 1048576) return `${(num / 1048576).toFixed(2)} TB`;
+    if (num >= 1024) return `${(num / 1024).toFixed(2)} GB`;
+    return `${num.toFixed(1)} MB`;
 }
 
 function statusBadge(status) {
@@ -5858,7 +5868,7 @@ async function fetchClusterStats() {
         
         const elTrafficTotals = document.getElementById('cluster-dash-traffic-totals');
         if (elTrafficTotals && traffic24h.totalUpMb !== undefined) {
-            elTrafficTotals.textContent = `↑ ${traffic24h.totalUpMb.toFixed(1)} MB ↓ ${traffic24h.totalDownMb.toFixed(1)} MB`;
+            elTrafficTotals.textContent = `↑ ${fmtMB(traffic24h.totalUpMb)} ↓ ${fmtMB(traffic24h.totalDownMb)}`;
         }
 
         const ctxTraffic = document.getElementById('clusterTrafficChart');
@@ -5980,15 +5990,15 @@ async function fetchClusterStats() {
                                         const label = context.dataset.label || '';
                                         const val = context.parsed.y || 0;
                                         if (label.includes('速率')) {
+                                            if (val >= 1048576) {
+                                                return ` ${label}: ${(val / 1048576).toFixed(2)} GB/s`;
+                                            }
                                             if (val >= 1024) {
                                                 return ` ${label}: ${(val / 1024).toFixed(2)} MB/s`;
                                             }
                                             return ` ${label}: ${val.toFixed(1)} KB/s`;
                                         } else {
-                                            if (val >= 1024) {
-                                                return ` ${label}: ${(val / 1024).toFixed(2)} GB`;
-                                            }
-                                            return ` ${label}: ${val.toFixed(1)} MB`;
+                                            return ` ${label}: ${fmtMB(val)}`;
                                         }
                                     }
                                 }
@@ -6014,6 +6024,7 @@ async function fetchClusterStats() {
                                     color: '#94a3b8',
                                     font: { size: 10 },
                                     callback: function(value) {
+                                        if (value >= 1048576) return (value / 1048576).toFixed(1) + ' GB/s';
                                         if (value >= 1024) return (value / 1024).toFixed(1) + ' MB/s';
                                         return Math.round(value) + ' KB/s';
                                     }
@@ -6028,6 +6039,7 @@ async function fetchClusterStats() {
                                     color: '#94a3b8',
                                     font: { size: 10 },
                                     callback: function(value) {
+                                        if (value >= 1048576) return (value / 1048576).toFixed(1) + ' TB';
                                         if (value >= 1024) return (value / 1024).toFixed(1) + ' GB';
                                         return Math.round(value) + ' MB';
                                     }
@@ -6092,7 +6104,7 @@ async function fetchClusterStats() {
                 <div style="font-size:12px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
                         <span style="font-weight:600;">${idx + 1}. ${item.name}</span>
-                        <span style="font-family:var(--font-mono, monospace); font-weight:700; color:#ec4899;">↑ ${item.upMb.toFixed(1)} MB ↓ ${item.downMb.toFixed(1)} MB</span>
+                        <span style="font-family:var(--font-mono, monospace); font-weight:700; color:#ec4899;">↑ ${fmtMB(item.upMb)} ↓ ${fmtMB(item.downMb)}</span>
                     </div>
                     <div style="font-size:10px; color:var(--text-secondary); margin-bottom:4px;">峰值 ${item.peakSpeed}</div>
                     <div class="progress-bar-bg" style="height:4px;"><div class="progress-bar-fill" style="width:${Math.min(100, (item.upMb + item.downMb) / 4)}%; background:#ec4899;"></div></div>
@@ -6382,7 +6394,7 @@ function renderClusterServers() {
 
                         <div>
                             <div style="font-size:11px; color:var(--text-secondary);">累计总流量</div>
-                            <div style="font-family:var(--font-mono, monospace); font-weight:700; color:#ec4899; font-size:12px; margin-top:2px;">↑ ${server.netTotalUpMb || 0} MB ↓ ${server.netTotalDownMb || 0} MB</div>
+                            <div style="font-family:var(--font-mono, monospace); font-weight:700; color:#ec4899; font-size:12px; margin-top:2px;">↑ ${fmtMB(server.netTotalUpMb)} ↓ ${fmtMB(server.netTotalDownMb)}</div>
                         </div>
 
                         <div>
