@@ -2172,6 +2172,23 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Recent Power Events on Dashboard -->
+                            <div class="card mb-20">
+                                <div class="card-header-bar" style="margin-bottom:12px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <h3 style="margin:0; font-size:15px;"><i class="fa-solid fa-clock-rotate-left" style="color:var(--accent-blue); margin-right:6px;"></i>最近供电与市电事件记录</h3>
+                                        <span class="badge badge-primary" id="ups-dash-logs-count-badge">实时动态</span>
+                                    </div>
+                                    <div style="display:flex; gap:8px;">
+                                        <button class="btn btn-secondary btn-sm" onclick="fetchUpsLogs()"><i class="fa-solid fa-rotate-right"></i> 刷新</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="switchUpsSubtab('ups-sub-logs')"><i class="fa-solid fa-list"></i> 查看全部日志 ➔</button>
+                                    </div>
+                                </div>
+                                <div id="ups-dash-recent-logs" style="display:flex; flex-direction:column; gap:10px;">
+                                    <div style="text-align:center; padding:20px; color:var(--text-secondary);">正在加载最近供电事件...</div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Subtab: 数据可视化 (Data Visualization) -->

@@ -3545,6 +3545,7 @@ function switchUpsSubtab(subpanelId) {
 }
 
 let latestUpsRawText = '';
+let lastClientUpsPowerStatus = null; // 'OB' or 'OL'
 
 async function fetchUpsStatus() {
     try {
@@ -3556,6 +3557,24 @@ async function fetchUpsStatus() {
 
         const data = json.data;
         latestUpsRawText = data.rawText || '';
+
+        // Power state transition detection & real-time notification
+        if (data.isOnline && data.statusRaw) {
+            const currentMode = data.statusRaw.includes('OB') ? 'OB' : 'OL';
+            if (lastClientUpsPowerStatus !== null && lastClientUpsPowerStatus !== currentMode) {
+                if (currentMode === 'OB') {
+                    if (typeof showToast === 'function') {
+                        showToast('⚠️ 警报：UPS 市电已中断，已切换为电池逆变供电！', 6000);
+                    }
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast('⚡ UPS 市电已恢复正常供电', 5000);
+                    }
+                }
+                fetchUpsLogs();
+            }
+            lastClientUpsPowerStatus = currentMode;
+        }
 
         // Dashboard updates
         const dashSource = document.getElementById('ups-dash-power-source');
@@ -4709,6 +4728,63 @@ function renderUpsLogs() {
     const container = document.getElementById('ups-logs-container');
     const badge = document.getElementById('ups-logs-count-badge');
     const filter = document.getElementById('ups-logs-filter')?.value || 'all';
+
+    // Render Recent Logs Widget on Dashboard
+    const dashRecentContainer = document.getElementById('ups-dash-recent-logs');
+    const dashBadge = document.getElementById('ups-dash-logs-count-badge');
+    if (dashRecentContainer) {
+        const recentEvents = latestUpsLogs.slice(0, 5);
+        if (dashBadge) dashBadge.textContent = `${latestUpsLogs.length} 条历史事件`;
+        if (recentEvents.length === 0) {
+            dashRecentContainer.innerHTML = `
+                <div style="text-align:center; padding:18px 12px; color:var(--text-secondary); background:rgba(255,255,255,0.02); border-radius:8px; font-size:12px;">
+                    <i class="fa-solid fa-clipboard-check" style="font-size:18px; margin-bottom:6px; display:block; opacity:0.5;"></i>
+                    暂无供电与市电异常事件记录
+                </div>
+            `;
+        } else {
+            dashRecentContainer.innerHTML = recentEvents.map(log => {
+                let levelBadge = 'badge-secondary';
+                let icon = 'fa-circle-info';
+                let borderLeftColor = 'rgba(59,130,246,0.6)';
+
+                if (log.level === 'success') {
+                    levelBadge = 'badge-success';
+                    icon = 'fa-circle-check';
+                    borderLeftColor = 'var(--accent-green)';
+                } else if (log.level === 'warning') {
+                    levelBadge = 'badge-warning';
+                    icon = 'fa-triangle-exclamation';
+                    borderLeftColor = 'var(--accent-orange)';
+                } else if (log.level === 'danger') {
+                    levelBadge = 'badge-danger';
+                    icon = 'fa-circle-xmark';
+                    borderLeftColor = 'var(--accent-danger)';
+                }
+
+                let typeLabel = '系统运维';
+                if (log.type === 'power') typeLabel = '⚡ 供电事件';
+                else if (log.type === 'battery') typeLabel = '🔋 电池/充电';
+                else if (log.type === 'system') typeLabel = '🌐 串口/协议';
+
+                return `
+                    <div style="padding:10px 14px; background:rgba(255,255,255,0.03); border-radius:6px; border-left: 3px solid ${borderLeftColor}; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+                        <div style="flex:1;">
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                                <span class="badge ${levelBadge}" style="font-size:10px; padding:2px 6px;"><i class="fa-solid ${icon}"></i> ${typeLabel}</span>
+                                <span style="font-weight:700; font-size:12px; color:var(--text-primary);">${log.title}</span>
+                            </div>
+                            <div style="font-size:12px; color:var(--text-secondary); line-height:1.4;">${log.detail}</div>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-secondary); white-space:nowrap; font-family:var(--font-mono, monospace);">
+                            ${log.timestamp}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
     if (!container) return;
 
     const filtered = latestUpsLogs.filter(item => {

@@ -4146,9 +4146,16 @@ async function sendUpsPushNotification(event) {
         const config = loadUpsConfig();
         const customWebhook = (config.notifyWebhookUrl || '').trim() || null;
         
+        let eventType = event.type || 'power_outage';
+        if (eventType === 'outage') eventType = 'power_outage';
+        if (eventType === 'restore') eventType = 'power_restore';
+        if (eventType === 'offline') eventType = 'power_outage';
+        if (eventType === 'low_battery') eventType = 'low_battery';
+        if (eventType === 'test') eventType = 'test';
+
         return await sendUnifiedNotification({
             moduleKey: 'ups',
-            eventType: event.type || 'power_outage',
+            eventType: eventType,
             title: event.title || '⚡ 机房电源告警',
             message: event.message || '',
             level: event.level || 'warning',
