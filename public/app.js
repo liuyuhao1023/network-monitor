@@ -5630,6 +5630,13 @@ function toggleSpeedAccordion(id) {
     el.style.display = isHidden ? 'block' : 'none';
 }
 
+function fetchSpeedtestInfo() {
+    const pingEl = document.getElementById('st-dev-ping');
+    if (pingEl && (pingEl.textContent === '--' || pingEl.textContent === '')) {
+        startFullNetworkTest();
+    }
+}
+
 async function startFullNetworkTest() {
     const btn = document.getElementById('btn-start-full-test');
     if (btn) {
@@ -5756,14 +5763,14 @@ async function runBrowserLanSpeedInternal() {
 
     // 1. Browser Latency (Ping)
     const pings = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
         const t0 = performance.now();
         try {
-            await fetch('/api/speedtest/dummy?size=0&t=' + Date.now());
+            await fetch('/api/speedtest/ping?t=' + Date.now());
             const t1 = performance.now();
             pings.push(t1 - t0);
         } catch(e) {}
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 40));
     }
     const avgPing = pings.length > 0 ? (pings.reduce((a, b) => a + b, 0) / pings.length).toFixed(1) : '1.2';
     document.getElementById('st-browser-ping').textContent = `${avgPing} ms`;
@@ -5773,7 +5780,7 @@ async function runBrowserLanSpeedInternal() {
     try {
         const dlEl = document.getElementById('st-browser-download');
         const dlSubEl = document.getElementById('st-browser-dl-sub');
-        if (dlEl) dlEl.textContent = '0.0 Mbps';
+        if (dlEl) dlEl.textContent = '测速中...';
 
         const dlStart = performance.now();
         const res = await fetch('/api/speedtest/dummy?size=50&t=' + Date.now());
@@ -5787,8 +5794,8 @@ async function runBrowserLanSpeedInternal() {
             receivedBytes += value.length;
 
             const now = performance.now();
-            if (now - lastTick > 80) {
-                const curDuration = Math.max(0.01, (now - dlStart) / 1000);
+            if (now - lastTick > 60) {
+                const curDuration = Math.max(0.001, (now - dlStart) / 1000);
                 const curMbps = ((receivedBytes * 8) / (1024 * 1024)) / curDuration;
                 if (dlEl) dlEl.textContent = `${curMbps.toFixed(1)} Mbps`;
                 lastTick = now;
@@ -5796,11 +5803,11 @@ async function runBrowserLanSpeedInternal() {
         }
 
         const dlEnd = performance.now();
-        const durationSec = Math.max(0.01, (dlEnd - dlStart) / 1000);
+        const durationSec = Math.max(0.001, (dlEnd - dlStart) / 1000);
         const finalSpeedMbps = ((receivedBytes * 8) / (1024 * 1024)) / durationSec;
 
         if (dlEl) dlEl.textContent = `${finalSpeedMbps.toFixed(1)} Mbps`;
-        if (dlSubEl) dlSubEl.textContent = `50MB 局域网数据流在 ${durationSec.toFixed(2)}s 完成`;
+        if (dlSubEl) dlSubEl.textContent = `${(receivedBytes / (1024 * 1024)).toFixed(0)}MB 局域网下行在 ${durationSec.toFixed(2)}s 完成`;
     } catch(e) {
         console.error('Browser LAN download error:', e);
         document.getElementById('st-browser-download').textContent = '测速超时';
@@ -5810,26 +5817,28 @@ async function runBrowserLanSpeedInternal() {
     try {
         const ulEl = document.getElementById('st-browser-upload');
         const ulSubEl = document.getElementById('st-browser-ul-sub');
-        if (ulEl) ulEl.textContent = '0.0 Mbps';
+        if (ulEl) ulEl.textContent = '测速中...';
 
         const dummyData = new Uint8Array(30 * 1024 * 1024);
         const ulStart = performance.now();
 
         const res = await fetch('/api/speedtest/upload', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/octet-stream'
+            },
             body: dummyData
         });
         const ulEnd = performance.now();
         const json = await res.json();
 
         let finalUlMbps = 0;
-        let durationSec = (ulEnd - ulStart) / 1000;
+        let durationSec = Math.max(0.001, (ulEnd - ulStart) / 1000);
 
-        if (json.success && json.speedMbps) {
-            finalUlMbps = json.speedMbps;
-            durationSec = json.durationSec || durationSec;
+        if (json && json.success && json.speedMbps) {
+            finalUlMbps = (30 * 8) / durationSec;
         } else {
-            finalUlMbps = (30 * 8) / Math.max(0.01, durationSec);
+            finalUlMbps = (30 * 8) / durationSec;
         }
 
         if (ulEl) ulEl.textContent = `${finalUlMbps.toFixed(1)} Mbps`;
