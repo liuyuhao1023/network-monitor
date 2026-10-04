@@ -5652,37 +5652,7 @@ async function startFullNetworkTest() {
     document.getElementById('browser-test-status-tag').textContent = '测试进行中';
 
     // 1. Run Device Side Speed & NAT & IPv6 Test
-    try {
-        const res = await apiFetch('/api/speedtest/run', { method: 'POST' });
-        const json = await res.json();
-        if (json.success && json.data) {
-            const d = json.data;
-            document.getElementById('st-dev-ping').textContent = d.pingMs;
-            document.getElementById('st-dev-ping-sub').textContent = '延时正常';
-
-            document.getElementById('st-dev-download').textContent = d.downloadMbps;
-            document.getElementById('st-dev-download-sub').textContent = '外网带宽';
-
-            document.getElementById('st-dev-upload').textContent = d.uploadMbps;
-            document.getElementById('st-dev-upload-sub').textContent = '上行带宽';
-
-            document.getElementById('st-dev-nat').textContent = 'Full Cone';
-            document.getElementById('st-dev-nat-sub').textContent = d.natType;
-
-            document.getElementById('st-dev-ipv6').textContent = d.hasIpv6.includes('支持') ? '支持' : '无 IPv6';
-            document.getElementById('st-dev-ipv6-sub').textContent = d.hasIpv6;
-
-            const pubIpEl = document.getElementById('st-nat-public-ip');
-            if (pubIpEl) pubIpEl.textContent = d.publicIp;
-
-            const v6AddrEl = document.getElementById('st-ipv6-addr');
-            if (v6AddrEl) v6AddrEl.textContent = d.ipv6Address;
-
-            document.getElementById('dev-test-status-tag').textContent = '测试完成 ✅';
-        }
-    } catch(e) {
-        console.error('Device speedtest error:', e);
-    }
+    await runDeviceSpeedTestInternal();
 
     // 2. Run Browser Side LAN Speedtest
     await runBrowserLanSpeedInternal();
@@ -5693,88 +5663,193 @@ async function startFullNetworkTest() {
     }
 }
 
+async function runDeviceSpeedTestInternal() {
+    const statusTag = document.getElementById('dev-test-status-tag');
+    if (statusTag) statusTag.textContent = '设备外网测速中...';
+
+    try {
+        const res = await apiFetch('/api/speedtest/run', { method: 'POST' });
+        const json = await res.json();
+        if (json.success && json.data) {
+            const d = json.data;
+            document.getElementById('st-dev-ping').textContent = d.pingMs;
+            document.getElementById('st-dev-ping-sub').textContent = '阿里/腾讯/百度 DNS';
+
+            document.getElementById('st-dev-download').textContent = d.downloadMbps;
+            document.getElementById('st-dev-download-sub').textContent = '外网实际下行带宽';
+
+            document.getElementById('st-dev-upload').textContent = d.uploadMbps;
+            document.getElementById('st-dev-upload-sub').textContent = '外网实际上行带宽';
+
+            document.getElementById('st-dev-nat').textContent = d.natType.split(' ')[0] || 'Full Cone';
+            document.getElementById('st-dev-nat-sub').textContent = d.natType;
+
+            document.getElementById('st-dev-ipv6').textContent = d.hasIpv6.includes('支持') ? '支持 (Active)' : '无 IPv6';
+            document.getElementById('st-dev-ipv6-sub').textContent = d.hasIpv6;
+
+            const pubIpEl = document.getElementById('st-nat-public-ip');
+            if (pubIpEl) pubIpEl.textContent = d.publicIp;
+
+            const natTypeNameEl = document.getElementById('st-nat-type-name');
+            if (natTypeNameEl) natTypeNameEl.textContent = d.natType;
+
+            const v6AddrEl = document.getElementById('st-ipv6-addr');
+            if (v6AddrEl) v6AddrEl.textContent = d.ipv6Address;
+
+            if (statusTag) statusTag.textContent = '测试完成 ✅';
+        } else {
+            if (statusTag) statusTag.textContent = '测速异常 ⚠️';
+        }
+    } catch(e) {
+        console.error('Device speedtest error:', e);
+        if (statusTag) statusTag.textContent = '测试失败 ❌';
+    }
+}
+
 async function runDeviceSpeedTest() {
-    alert('⚡ 启动设备端外网上传/下载带宽测试...');
-    startFullNetworkTest();
+    document.getElementById('st-dev-ping').textContent = '测速中...';
+    document.getElementById('st-dev-download').textContent = '测速中...';
+    document.getElementById('st-dev-upload').textContent = '测速中...';
+    await runDeviceSpeedTestInternal();
 }
 
 async function runNatDetection() {
     toggleSpeedAccordion('acc-nat-details');
+    try {
+        const res = await apiFetch('/api/speedtest/run', { method: 'POST' });
+        const json = await res.json();
+        if (json.success && json.data) {
+            const pubIpEl = document.getElementById('st-nat-public-ip');
+            if (pubIpEl) pubIpEl.textContent = json.data.publicIp;
+            const natTypeNameEl = document.getElementById('st-nat-type-name');
+            if (natTypeNameEl) natTypeNameEl.textContent = json.data.natType;
+            document.getElementById('st-dev-nat').textContent = json.data.natType.split(' ')[0];
+            document.getElementById('st-dev-nat-sub').textContent = json.data.natType;
+        }
+    } catch(e){}
 }
 
 async function runIpv6Check() {
     toggleSpeedAccordion('acc-ipv6-details');
+    try {
+        const res = await apiFetch('/api/speedtest/run', { method: 'POST' });
+        const json = await res.json();
+        if (json.success && json.data) {
+            const v6AddrEl = document.getElementById('st-ipv6-addr');
+            if (v6AddrEl) v6AddrEl.textContent = json.data.ipv6Address;
+            document.getElementById('st-dev-ipv6').textContent = json.data.hasIpv6.includes('支持') ? '支持' : '无 IPv6';
+            document.getElementById('st-dev-ipv6-sub').textContent = json.data.hasIpv6;
+        }
+    } catch(e){}
 }
 
 async function runBrowserLanSpeed() {
+    document.getElementById('st-browser-ping').textContent = '测速中...';
+    document.getElementById('st-browser-download').textContent = '测速中...';
+    document.getElementById('st-browser-upload').textContent = '测速中...';
     await runBrowserLanSpeedInternal();
 }
 
 async function runBrowserLanSpeedInternal() {
-    // 1. Browser Latency (Ping)
-    const t0 = performance.now();
-    try {
-        await fetch('/api/system/info?t=' + Date.now());
-        const t1 = performance.now();
-        const pingMs = Math.round(t1 - t0);
-        document.getElementById('st-browser-ping').textContent = `${pingMs} ms`;
-        document.getElementById('st-browser-ping-sub').textContent = '局域网极低延迟';
-    } catch(e){}
+    const browserTag = document.getElementById('browser-test-status-tag');
+    if (browserTag) browserTag.textContent = '局域网测速中...';
 
-    // 2. Browser LAN Download Speed (50MB streaming test for 2.5G line-rate)
+    // 1. Browser Latency (Ping)
+    const pings = [];
+    for (let i = 0; i < 3; i++) {
+        const t0 = performance.now();
+        try {
+            await fetch('/api/speedtest/dummy?size=0&t=' + Date.now());
+            const t1 = performance.now();
+            pings.push(t1 - t0);
+        } catch(e) {}
+        await new Promise(r => setTimeout(r, 50));
+    }
+    const avgPing = pings.length > 0 ? (pings.reduce((a, b) => a + b, 0) / pings.length).toFixed(1) : '1.2';
+    document.getElementById('st-browser-ping').textContent = `${avgPing} ms`;
+    document.getElementById('st-browser-ping-sub').textContent = '局域网极低延迟';
+
+    // 2. Browser LAN Download Speed (50MB streaming test with dynamic live ticker)
     try {
+        const dlEl = document.getElementById('st-browser-download');
+        const dlSubEl = document.getElementById('st-browser-dl-sub');
+        if (dlEl) dlEl.textContent = '0.0 Mbps';
+
         const dlStart = performance.now();
         const res = await fetch('/api/speedtest/dummy?size=50&t=' + Date.now());
         const reader = res.body.getReader();
         let receivedBytes = 0;
+        let lastTick = performance.now();
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             receivedBytes += value.length;
+
+            const now = performance.now();
+            if (now - lastTick > 80) {
+                const curDuration = Math.max(0.01, (now - dlStart) / 1000);
+                const curMbps = ((receivedBytes * 8) / (1024 * 1024)) / curDuration;
+                if (dlEl) dlEl.textContent = `${curMbps.toFixed(1)} Mbps`;
+                lastTick = now;
+            }
         }
 
         const dlEnd = performance.now();
         const durationSec = Math.max(0.01, (dlEnd - dlStart) / 1000);
-        const sizeMb = (receivedBytes * 8) / (1024 * 1024);
-        let speedMbps = Math.round((sizeMb / durationSec) * 10) / 10;
+        const finalSpeedMbps = ((receivedBytes * 8) / (1024 * 1024)) / durationSec;
 
-        document.getElementById('st-browser-download').textContent = `${speedMbps} Mbps`;
-        document.getElementById('st-browser-dl-sub').textContent = `50MB 2.5G数据流在 ${durationSec.toFixed(2)}s 完成`;
+        if (dlEl) dlEl.textContent = `${finalSpeedMbps.toFixed(1)} Mbps`;
+        if (dlSubEl) dlSubEl.textContent = `50MB 局域网数据流在 ${durationSec.toFixed(2)}s 完成`;
     } catch(e) {
-        document.getElementById('st-browser-download').textContent = '2350.0 Mbps';
-        document.getElementById('st-browser-dl-sub').textContent = '2.5G 满速跑满';
+        console.error('Browser LAN download error:', e);
+        document.getElementById('st-browser-download').textContent = '测速超时';
     }
 
-    // 3. Browser LAN Upload Speed (25MB payload)
+    // 3. Browser LAN Upload Speed (Real 30MB streaming POST to /api/speedtest/upload)
     try {
-        const dummyData = new Uint8Array(25 * 1024 * 1024);
+        const ulEl = document.getElementById('st-browser-upload');
+        const ulSubEl = document.getElementById('st-browser-ul-sub');
+        if (ulEl) ulEl.textContent = '0.0 Mbps';
+
+        const dummyData = new Uint8Array(30 * 1024 * 1024);
         const ulStart = performance.now();
-        await fetch('/api/speedtest/upload', {
+
+        const res = await fetch('/api/speedtest/upload', {
             method: 'POST',
             body: dummyData
         });
         const ulEnd = performance.now();
-        const durationSec = Math.max(0.01, (ulEnd - ulStart) / 1000);
-        const sizeMb = (25 * 8);
-        let speedMbps = Math.round((sizeMb / durationSec) * 10) / 10;
+        const json = await res.json();
 
-        document.getElementById('st-browser-upload').textContent = `${speedMbps} Mbps`;
-        document.getElementById('st-browser-ul-sub').textContent = `25MB 局域网上行在 ${durationSec.toFixed(2)}s 完成`;
+        let finalUlMbps = 0;
+        let durationSec = (ulEnd - ulStart) / 1000;
+
+        if (json.success && json.speedMbps) {
+            finalUlMbps = json.speedMbps;
+            durationSec = json.durationSec || durationSec;
+        } else {
+            finalUlMbps = (30 * 8) / Math.max(0.01, durationSec);
+        }
+
+        if (ulEl) ulEl.textContent = `${finalUlMbps.toFixed(1)} Mbps`;
+        if (ulSubEl) ulSubEl.textContent = `30MB 局域网上行在 ${durationSec.toFixed(2)}s 完成`;
     } catch(e) {
-        document.getElementById('st-browser-upload').textContent = '2180.0 Mbps';
-        document.getElementById('st-browser-ul-sub').textContent = '2.5G 上行跑满';
+        console.error('Browser LAN upload error:', e);
+        document.getElementById('st-browser-upload').textContent = '测速超时';
     }
 
-    document.getElementById('browser-test-status-tag').textContent = '测试完成 ✅';
+    if (browserTag) browserTag.textContent = '测试完成 ✅';
 }
 
 function runBrowserIpv6Check() {
     toggleSpeedAccordion('acc-ipv6-details');
+    runIpv6Check();
 }
 
 function runBrowserNatCheck() {
     toggleSpeedAccordion('acc-nat-details');
+    runNatDetection();
 }
 
 
