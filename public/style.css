@@ -3591,5 +3591,480 @@ body:not(.theme-light) .website-sidebar-btn.active {
     word-break: break-all;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   🪄 UPS INITIALIZATION WIZARD (首次使用初始化向导)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.ups-wizard-card {
+    background: var(--card-bg, #111827);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 14px;
+    padding: 28px 32px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+body.theme-light .ups-wizard-card {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+.ups-wizard-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    letter-spacing: 0.03em;
+}
+
+/* ─── Wizard Stepper Bar ─── */
+.ups-wizard-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 28px 0 24px 0;
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    border-radius: 12px;
+}
+
+body.theme-light .ups-wizard-stepper {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.ups-step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0.45;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ups-step-item.active {
+    opacity: 1;
+}
+
+.ups-step-item.completed {
+    opacity: 0.9;
+}
+
+.ups-step-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid var(--border-color, rgba(255, 255, 255, 0.15));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+}
+
+.ups-step-item.active .ups-step-circle {
+    background: #3b82f6;
+    border-color: #60a5fa;
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+    transform: scale(1.08);
+}
+
+.ups-step-item.completed .ups-step-circle {
+    background: #10b981;
+    border-color: #34d399;
+    color: #ffffff;
+}
+
+.ups-step-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.ups-step-num {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.ups-step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ups-step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--border-color, rgba(255, 255, 255, 0.1));
+    margin: 0 14px;
+    transition: all 0.3s ease;
+}
+
+.ups-step-line.active {
+    background: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+.ups-step-line.completed {
+    background: #10b981;
+}
+
+/* ─── Step 1 Radar Pulse Animation ─── */
+.ups-scan-container {
+    text-align: center;
+    padding: 30px 20px;
+}
+
+.ups-radar-animation {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 16px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ups-radar-pulse {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+    animation: upsPulseRadar 2.4s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ups-radar-center-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #ffffff;
+    box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);
+    z-index: 2;
+}
+
+@keyframes upsPulseRadar {
+    0% {
+        transform: scale(0.35);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+}
+
+.ups-terminal-log-box {
+    background: #090d16;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 14px 18px;
+    max-width: 640px;
+    margin: 0 auto;
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    text-align: left;
+    color: #94a3b8;
+    max-height: 180px;
+    overflow-y: auto;
+    line-height: 1.7;
+}
+
+body.theme-light .ups-terminal-log-box {
+    background: #0f172a;
+    color: #cbd5e1;
+}
+
+.ups-log-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.ups-log-row .log-tag {
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.ups-log-row .log-tag.tag-sys { color: #38bdf8; }
+.ups-log-row .log-tag.tag-ok { color: #4ade80; }
+.ups-log-row .log-tag.tag-warn { color: #fbbf24; }
+
+/* ─── Step 2 Device Selection Grid ─── */
+.ups-device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+}
+
+.ups-device-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 2px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+body.theme-light .ups-device-card {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.ups-device-card:hover {
+    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(59, 130, 246, 0.04);
+    transform: translateY(-2px);
+}
+
+.ups-device-card.selected {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.09);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+}
+
+body.theme-light .ups-device-card.selected {
+    background: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.ups-device-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.ups-dev-icon-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.ups-dev-radio {
+    accent-color: #3b82f6;
+    width: 17px;
+    height: 17px;
+    margin-top: 4px;
+    cursor: pointer;
+}
+
+.ups-dev-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 8px 0 4px 0;
+}
+
+.ups-dev-vendor {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.ups-dev-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    background: rgba(0, 0, 0, 0.15);
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+body.theme-light .ups-dev-meta {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.ups-policy-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    padding: 14px 18px;
+}
+
+body.theme-light .ups-policy-card {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+/* ─── Step 3 Handshake Pipeline ─── */
+.ups-connecting-spinner {
+    font-size: 40px;
+    color: #3b82f6;
+    margin: 10px auto 16px auto;
+}
+
+.ups-handshake-pipeline {
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    text-align: left;
+}
+
+.ups-pipeline-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+body.theme-light .ups-pipeline-item {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.ups-pipeline-item.active {
+    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.ups-pipeline-item.completed {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.06);
+}
+
+.ups-pipeline-item .pipe-icon {
+    font-size: 18px;
+    color: #3b82f6;
+    width: 24px;
+    text-align: center;
+}
+
+.ups-pipeline-item.completed .pipe-icon {
+    color: #10b981;
+}
+
+.ups-pipeline-item.pending .pipe-icon {
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+.pipe-text .pipe-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.pipe-text .pipe-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.pipe-item-connector {
+    width: 2px;
+    height: 12px;
+    background: var(--border-color, rgba(255, 255, 255, 0.1));
+    margin-left: 27px;
+}
+
+/* ─── Step 4 Success & Celebration ─── */
+.ups-ready-box {
+    text-align: center;
+    padding: 24px 10px;
+}
+
+.ups-success-checkmark-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.ups-success-circle {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981, #059669);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #ffffff;
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.4);
+    animation: upsPopIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes upsPopIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.ups-ready-summary-card {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 680px;
+    margin: 20px auto 0 auto;
+    text-align: left;
+}
+
+@media (max-width: 768px) {
+    .ups-ready-summary-card { grid-template-columns: 1fr; }
+}
+
+.ups-summary-kpi-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+
+body.theme-light .ups-summary-kpi-item {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.ups-summary-kpi-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.ups-summary-kpi-val {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
 
 

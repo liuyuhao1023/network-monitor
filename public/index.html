@@ -1958,7 +1958,246 @@
                  12. UPS 电源管理 SECTION (FnOS / Synology DSM 风格)
                  ═════════════════════════════════════════════════════════════════════ -->
             <section class="tab-panel" id="tab-ups">
-                <div class="ups-layout" style="display:grid; grid-template-columns: 220px 1fr; gap: 20px;">
+                <!-- 🪄 UPS 首次使用初始化配置向导 (4步渐进式连接) -->
+                <div id="ups-init-wizard-container" style="display:none; max-width: 980px; margin: 0 auto; padding: 10px 0 30px 0;">
+                    <div class="card ups-wizard-card">
+                        <!-- Wizard Header -->
+                        <div class="ups-wizard-header">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+                                <div>
+                                    <div class="ups-wizard-pill"><i class="fa-solid fa-bolt-lightning"></i> UPS 首次使用初始化向导</div>
+                                    <h2 style="font-size:22px; font-weight:700; margin: 10px 0 4px 0;">配置与接入机房 UPS 不间断电源</h2>
+                                    <p style="color:var(--text-secondary); font-size:13px; margin:0;">
+                                        4 步全自动智能向导：探测物理总线与设备、选择机型、建立实时通讯握手并同步供电保护策略
+                                    </p>
+                                </div>
+                                <button class="btn btn-secondary btn-sm" id="btn-ups-wizard-exit" onclick="exitUpsInitWizard()" style="display:none;">
+                                    <i class="fa-solid fa-xmark"></i> 退出向导返回面板
+                                </button>
+                            </div>
+
+                            <!-- Step Progress Indicator -->
+                            <div class="ups-wizard-stepper">
+                                <div class="ups-step-item active" id="ups-step-ind-1">
+                                    <div class="ups-step-circle"><i class="fa-solid fa-radar"></i></div>
+                                    <div class="ups-step-info">
+                                        <span class="ups-step-num">步骤 1</span>
+                                        <span class="ups-step-title">智能识别硬件</span>
+                                    </div>
+                                </div>
+                                <div class="ups-step-line" id="ups-step-line-1"></div>
+                                <div class="ups-step-item" id="ups-step-ind-2">
+                                    <div class="ups-step-circle"><i class="fa-solid fa-list-check"></i></div>
+                                    <div class="ups-step-info">
+                                        <span class="ups-step-num">步骤 2</span>
+                                        <span class="ups-step-title">选择设备与参数</span>
+                                    </div>
+                                </div>
+                                <div class="ups-step-line" id="ups-step-line-2"></div>
+                                <div class="ups-step-item" id="ups-step-ind-3">
+                                    <div class="ups-step-circle"><i class="fa-solid fa-network-wired"></i></div>
+                                    <div class="ups-step-info">
+                                        <span class="ups-step-num">步骤 3</span>
+                                        <span class="ups-step-title">建立通讯握手</span>
+                                    </div>
+                                </div>
+                                <div class="ups-step-line" id="ups-step-line-3"></div>
+                                <div class="ups-step-item" id="ups-step-ind-4">
+                                    <div class="ups-step-circle"><i class="fa-solid fa-circle-check"></i></div>
+                                    <div class="ups-step-info">
+                                        <span class="ups-step-num">步骤 4</span>
+                                        <span class="ups-step-title">完成接入就绪</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wizard Step Content Container -->
+                        <div class="ups-wizard-body">
+                            <!-- STEP 1: SCANNING -->
+                            <div class="ups-wizard-step-pane active" id="ups-wizard-step-1">
+                                <div class="ups-scan-container">
+                                    <div class="ups-radar-animation">
+                                        <div class="ups-radar-pulse"></div>
+                                        <div class="ups-radar-pulse" style="animation-delay: 0.8s;"></div>
+                                        <div class="ups-radar-pulse" style="animation-delay: 1.6s;"></div>
+                                        <div class="ups-radar-center-icon">
+                                            <i class="fa-solid fa-microchip"></i>
+                                        </div>
+                                    </div>
+                                    <h3 style="font-size:18px; font-weight:700; margin: 18px 0 6px 0;" id="ups-scan-headline">正在智能检索主板 USB 与网络设备...</h3>
+                                    <p style="color:var(--text-secondary); font-size:13px; max-width:540px; margin:0 auto 20px auto;" id="ups-scan-subline">
+                                        正在探测 Linux 物理总线 (lsusb)、NUT 驱动协议栈以及局域网串口服务器...
+                                    </p>
+
+                                    <div class="ups-terminal-log-box" id="ups-scan-terminal">
+                                        <div class="ups-log-row"><span class="log-tag tag-sys">[物理总线]</span> 正在扫描 Linux USB 端口与 HID 设备 (lsusb VendorID / ProductID)...</div>
+                                    </div>
+
+                                    <div style="margin-top:24px; display:flex; justify-content:center; gap:14px;">
+                                        <button class="btn btn-secondary" onclick="startUpsScan(true)">
+                                            <i class="fa-solid fa-rotate"></i> 重新扫描
+                                        </button>
+                                        <button class="btn btn-primary" id="btn-ups-step1-next" onclick="goToUpsWizardStep(2)" style="display:none;">
+                                            下一步：选择设备与配置 <i class="fa-solid fa-arrow-right"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- STEP 2: SELECT DEVICE & CONFIG -->
+                            <div class="ups-wizard-step-pane" id="ups-wizard-step-2" style="display:none;">
+                                <div style="margin-bottom:18px;">
+                                    <h3 style="font-size:16px; font-weight:700; margin-bottom:4px;">1. 选择匹配的 UPS 硬件设备</h3>
+                                    <p style="color:var(--text-secondary); font-size:12.5px;">系统已为您自动匹配最佳硬件设备，您也可点击切换不同品牌或通信方式：</p>
+                                </div>
+
+                                <div class="ups-device-grid" id="ups-wizard-device-cards">
+                                    <!-- Dynamic Device Cards injected by JS -->
+                                </div>
+
+                                <!-- Custom TCP Parameters Box -->
+                                <div id="ups-wizard-custom-fields" class="ups-inner-box" style="margin-top:16px; padding:16px; display:none;">
+                                    <div style="font-size:13px; font-weight:600; margin-bottom:10px;"><i class="fa-solid fa-sliders"></i> 网络串口服务器 / NUT 远端端点设置</div>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                                        <div>
+                                            <label style="font-size:12px; color:var(--text-secondary);">串口服务器 / 远端主机 IP</label>
+                                            <input type="text" id="ups-wiz-tcphost" class="form-input" placeholder="例如 192.168.1.8 / 127.0.0.1">
+                                        </div>
+                                        <div>
+                                            <label style="font-size:12px; color:var(--text-secondary);">端口号 (Port)</label>
+                                            <input type="number" id="ups-wiz-tcpport" class="form-input" value="8887" placeholder="8887 / 3493">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2 Policy Settings -->
+                                <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border-color, rgba(255,255,255,0.08));">
+                                    <h3 style="font-size:16px; font-weight:700; margin-bottom:4px;">2. 安全保护与运行策略</h3>
+                                    <p style="color:var(--text-secondary); font-size:12.5px; margin-bottom:16px;">配置断电应急保护策略与能效工作模式：</p>
+
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                                        <div class="ups-policy-card">
+                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                                <span style="font-weight:600; font-size:13px;">🛡️ 自动安全保护停机阈值</span>
+                                                <span class="badge badge-warning" id="ups-wiz-lowbat-val">20%</span>
+                                            </div>
+                                            <input type="range" id="ups-wiz-lowbat-slider" min="10" max="50" step="5" value="20" class="form-range" oninput="document.getElementById('ups-wiz-lowbat-val').textContent = this.value + '%'" style="width:100%;">
+                                            <div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">当市电中断且 UPS 电池电量降至该阈值时，自动触发 PVE 主机与虚拟机安全关机保护数据。</div>
+                                        </div>
+
+                                        <div class="ups-policy-card">
+                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                                <span style="font-weight:600; font-size:13px;">🌿 默认供电模式</span>
+                                                <span class="badge badge-success">智能推荐</span>
+                                            </div>
+                                            <select id="ups-wiz-workmode" class="form-input" style="padding:7px 10px; font-size:13px;">
+                                                <option value="eco" selected>🌿 ECO 绿色节能模式 (自耗 ≈ 3~5W，推荐)</option>
+                                                <option value="online">⚡ 全时稳压在线模式 (纯正弦波全时滤波)</option>
+                                            </select>
+                                            <div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">ECO 模式下市电正常时通过高效率 AVR 绿色滤波供电，市电异常 2~4ms 极速切换电池逆变。</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style="margin-top:28px; display:flex; justify-content:space-between; align-items:center;">
+                                    <button class="btn btn-secondary" onclick="goToUpsWizardStep(1)">
+                                        <i class="fa-solid fa-arrow-left"></i> 上一步：重新扫描
+                                    </button>
+                                    <button class="btn btn-primary" onclick="proceedToUpsHandshake()">
+                                        下一步：建立通讯握手 <i class="fa-solid fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- STEP 3: HANDSHAKE & CONNECTING -->
+                            <div class="ups-wizard-step-pane" id="ups-wizard-step-3" style="display:none;">
+                                <div style="text-align:center; padding: 20px 0 10px 0;">
+                                    <div class="ups-connecting-spinner">
+                                        <i class="fa-solid fa-arrows-rotate fa-spin"></i>
+                                    </div>
+                                    <h3 style="font-size:18px; font-weight:700; margin: 18px 0 6px 0;" id="ups-handshake-title">正在建立 UPS 双向通讯握手...</h3>
+                                    <p style="color:var(--text-secondary); font-size:13px; max-width:540px; margin:0 auto 24px auto;" id="ups-handshake-sub">
+                                        正在加载协议栈、绑定通信端口并校验实时遥测数据流...
+                                    </p>
+
+                                    <!-- Handshake Pipeline Checklist -->
+                                    <div class="ups-handshake-pipeline" id="ups-handshake-checklist">
+                                        <div class="ups-pipeline-item" id="pipe-item-1">
+                                            <div class="pipe-icon"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+                                            <div class="pipe-text">
+                                                <div class="pipe-name">加载驱动配置与协议栈</div>
+                                                <div class="pipe-sub">写入配置并启动 NUT usbhid-ups 协议适配层</div>
+                                            </div>
+                                        </div>
+                                        <div class="pipe-item-connector"></div>
+                                        <div class="pipe-item-pending" id="pipe-item-2">
+                                            <div class="pipe-icon"><i class="fa-regular fa-circle"></i></div>
+                                            <div class="pipe-text">
+                                                <div class="pipe-name">绑定通信接口与守护进程</div>
+                                                <div class="pipe-sub">建立主板直连 USB 端口通信 (0764:0501)</div>
+                                            </div>
+                                        </div>
+                                        <div class="pipe-item-connector"></div>
+                                        <div class="pipe-item-pending" id="pipe-item-3">
+                                            <div class="pipe-icon"><i class="fa-regular fa-circle"></i></div>
+                                            <div class="pipe-text">
+                                                <div class="pipe-name">采集实时电网与电池状态</div>
+                                                <div class="pipe-sub">读取市电电压 (220V)、电池电量、工作拓扑与负载</div>
+                                            </div>
+                                        </div>
+                                        <div class="pipe-item-connector"></div>
+                                        <div class="pipe-item-pending" id="pipe-item-4">
+                                            <div class="pipe-icon"><i class="fa-regular fa-circle"></i></div>
+                                            <div class="pipe-text">
+                                                <div class="pipe-name">同步守护进程与看门狗监控</div>
+                                                <div class="pipe-sub">启用断电毫秒级侦测与低电量自动停机保护</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-top:28px;">
+                                        <button class="btn btn-secondary btn-sm" id="btn-ups-handshake-retry" onclick="proceedToUpsHandshake()" style="display:none;">
+                                            <i class="fa-solid fa-rotate-right"></i> 重试连接
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- STEP 4: SUCCESS & READY TRANSITION -->
+                            <div class="ups-wizard-step-pane" id="ups-wizard-step-4" style="display:none;">
+                                <div class="ups-ready-box">
+                                    <div class="ups-success-checkmark-wrapper">
+                                        <div class="ups-success-circle">
+                                            <i class="fa-solid fa-check"></i>
+                                        </div>
+                                    </div>
+                                    <h2 style="font-size:22px; font-weight:700; margin:16px 0 6px 0;">🎉 UPS 通讯连接成功！</h2>
+                                    <p style="color:var(--text-secondary); font-size:13.5px; max-width:540px; margin:0 auto 24px auto;">
+                                        机房电源保护系统已就绪，实时遥测与断电联动保护已全时生效。
+                                    </p>
+
+                                    <!-- Summary KPI Card -->
+                                    <div class="ups-ready-summary-card" id="ups-ready-summary">
+                                        <!-- Populated dynamically with live metrics -->
+                                    </div>
+
+                                    <div style="margin-top:28px; display:flex; justify-content:center; gap:16px;">
+                                        <button class="btn btn-primary btn-lg" onclick="finishUpsInitialization()" style="padding:12px 32px; font-size:15px; font-weight:600; box-shadow: 0 4px 14px rgba(59,130,246,0.35);">
+                                            <i class="fa-solid fa-gauge-high"></i> 完成配置，进入监控面板
+                                        </button>
+                                    </div>
+                                    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:12px;" id="ups-ready-countdown">
+                                        将于 5 秒后自动跳转至仪表盘...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- UPS 主管理布局 (侧边栏 + 子面板) -->
+                <div class="ups-layout" id="ups-main-layout" style="display:grid; grid-template-columns: 220px 1fr; gap: 20px;">
                     <!-- UPS Sub Navigation Sidebar -->
                     <div class="card" style="padding: 16px 12px; height: fit-content;">
                         <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; padding:6px 10px 10px 10px;">状态监控</div>
@@ -1975,7 +2214,13 @@
                         <button class="ups-subnav-btn" onclick="switchUpsSubtab('ups-sub-diag')"><span class="nav-ico">🩺</span>诊断与自检</button>
                         <button class="ups-subnav-btn" onclick="switchUpsSubtab('ups-sub-config')"><span class="nav-ico">⚙️</span>通信协议配置</button>
 
-                        <div style="margin-top: 24px; padding: 12px; background: rgba(59,130,246,0.08); border-radius: 8px; border: 1px solid rgba(59,130,246,0.2);">
+                        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));">
+                            <button class="btn btn-secondary btn-sm" style="width:100%; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="openUpsInitWizard()">
+                                <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent-blue);"></i> 重新运行初始化向导
+                            </button>
+                        </div>
+
+                        <div style="margin-top: 16px; padding: 12px; background: rgba(59,130,246,0.08); border-radius: 8px; border: 1px solid rgba(59,130,246,0.2);">
                             <div style="font-size: 11px; color: var(--text-secondary); margin-bottom:4px;">UPS 电源管理 v2.0</div>
                             <span class="badge badge-success" id="ups-mini-status-badge">在线</span>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top:6px;" id="ups-mini-status-desc">在线，市电正常供电中</div>
@@ -1987,13 +2232,16 @@
                         <!-- Subtab 1: 仪表盘 -->
                         <div class="ups-subpanel active" id="ups-sub-dashboard">
                             <div class="card mb-20 ups-hero-card">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                                     <div>
                                         <span style="font-size:11px; color:var(--text-secondary); letter-spacing:0.05em; text-transform:uppercase;">POWER STATUS</span>
                                         <h2 style="font-size:24px; margin-top:2px;" id="ups-dash-power-source">市电供电中</h2>
                                         <p style="font-size:13px; color:var(--text-secondary);" id="ups-dash-status-text">在线，市电正常，正在电池浮充</p>
                                     </div>
-                                    <button class="btn btn-secondary btn-sm" onclick="fetchUpsStatus()"><i class="fa-solid fa-rotate-right"></i> 刷新数据</button>
+                                    <div style="display:flex; gap:8px;">
+                                        <button class="btn btn-secondary btn-sm" onclick="openUpsInitWizard()"><i class="fa-solid fa-wand-magic-sparkles"></i> 设置向导</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="fetchUpsStatus()"><i class="fa-solid fa-rotate-right"></i> 刷新数据</button>
+                                    </div>
                                 </div>
                             </div>
 

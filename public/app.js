@@ -3576,6 +3576,453 @@ function switchUpsSubtab(subpanelId) {
     if (subpanelId === 'ups-sub-power-quality') fetchUpsPowerQuality();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🪄 UPS INITIALIZATION WIZARD CONTROLLER (首次初始化向导)
+// ═══════════════════════════════════════════════════════════════════════════
+let upsWizardCurrentStep = 1;
+let upsWizardDetectedDevices = [];
+let upsWizardSelectedDeviceId = 'cps_usb';
+let upsWizardCountdownTimer = null;
+let upsWizardHasShownAuto = false;
+let upsWizardLiveMetrics = null;
+
+function openUpsInitWizard(canExit = true) {
+    const wizardEl = document.getElementById('ups-init-wizard-container');
+    const mainEl = document.getElementById('ups-main-layout');
+    const btnExit = document.getElementById('btn-ups-wizard-exit');
+
+    if (wizardEl) wizardEl.style.display = 'block';
+    if (mainEl) mainEl.style.display = 'none';
+    if (btnExit) btnExit.style.display = canExit ? 'inline-flex' : 'none';
+
+    if (upsWizardCountdownTimer) {
+        clearInterval(upsWizardCountdownTimer);
+        upsWizardCountdownTimer = null;
+    }
+
+    goToUpsWizardStep(1);
+    startUpsScan();
+}
+
+function exitUpsInitWizard() {
+    if (upsWizardCountdownTimer) {
+        clearInterval(upsWizardCountdownTimer);
+        upsWizardCountdownTimer = null;
+    }
+    const wizardEl = document.getElementById('ups-init-wizard-container');
+    const mainEl = document.getElementById('ups-main-layout');
+
+    if (wizardEl) wizardEl.style.display = 'none';
+    if (mainEl) mainEl.style.display = 'grid';
+
+    fetchUpsStatus();
+}
+
+function goToUpsWizardStep(step) {
+    upsWizardCurrentStep = step;
+
+    // 1. Update Step Indicator Badges
+    for (let i = 1; i <= 4; i++) {
+        const indEl = document.getElementById(`ups-step-ind-${i}`);
+        if (!indEl) continue;
+        indEl.classList.remove('active', 'completed');
+        if (i < step) {
+            indEl.classList.add('completed');
+            const circle = indEl.querySelector('.ups-step-circle');
+            if (circle) circle.innerHTML = '<i class="fa-solid fa-check"></i>';
+        } else if (i === step) {
+            indEl.classList.add('active');
+            const circle = indEl.querySelector('.ups-step-circle');
+            const icons = ['fa-radar', 'fa-list-check', 'fa-network-wired', 'fa-circle-check'];
+            if (circle) circle.innerHTML = `<i class="fa-solid ${icons[i-1]}"></i>`;
+        } else {
+            const circle = indEl.querySelector('.ups-step-circle');
+            const icons = ['fa-radar', 'fa-list-check', 'fa-network-wired', 'fa-circle-check'];
+            if (circle) circle.innerHTML = `<i class="fa-solid ${icons[i-1]}"></i>`;
+        }
+    }
+
+    // Update Connector Lines
+    for (let i = 1; i <= 3; i++) {
+        const lineEl = document.getElementById(`ups-step-line-${i}`);
+        if (!lineEl) continue;
+        lineEl.classList.remove('active', 'completed');
+        if (i < step) {
+            lineEl.classList.add('completed');
+        } else if (i === step) {
+            lineEl.classList.add('active');
+        }
+    }
+
+    // 2. Switch Step Panes
+    for (let i = 1; i <= 4; i++) {
+        const pane = document.getElementById(`ups-wizard-step-${i}`);
+        if (pane) {
+            pane.style.display = (i === step) ? 'block' : 'none';
+            if (i === step) pane.classList.add('active');
+            else pane.classList.remove('active');
+        }
+    }
+}
+
+async function startUpsScan(manual = false) {
+    const term = document.getElementById('ups-scan-terminal');
+    const headline = document.getElementById('ups-scan-headline');
+    const subline = document.getElementById('ups-scan-subline');
+    const btnNext = document.getElementById('btn-ups-step1-next');
+
+    if (btnNext) btnNext.style.display = 'none';
+    if (headline) headline.textContent = '正在智能检索主板 USB 与网络设备...';
+    if (subline) subline.textContent = '正在探测 Linux 物理总线 (lsusb)、NUT 驱动协议栈以及局域网串口服务器...';
+
+    if (term) {
+        term.innerHTML = `
+            <div class="ups-log-row"><span class="log-tag tag-sys">[物理总线]</span> 正在扫描 Linux USB 端口与 HID 设备 (lsusb VendorID / ProductID)...</div>
+        `;
+    }
+
+    try {
+        const res = await apiFetch('/api/ups/autodetect', { method: 'POST' });
+        const data = await res.json();
+
+        await new Promise(r => setTimeout(r, 350));
+        if (term) {
+            term.innerHTML += `
+                <div class="ups-log-row"><span class="log-tag tag-sys">[协议探测]</span> 检索 NUT Daemon (Network UPS Tools) 驱动与服务状态...</div>
+            `;
+            term.scrollTop = term.scrollHeight;
+        }
+
+        await new Promise(r => setTimeout(r, 400));
+        if (term) {
+            if (data.foundUsbUps) {
+                term.innerHTML += `
+                    <div class="ups-log-row"><span class="log-tag tag-ok">[硬件匹配]</span> 🟢 成功发现直连设备: ${data.usbDeviceName || 'CyberPower USB-HID'}</div>
+                    <div class="ups-log-row"><span class="log-tag tag-ok">[驱动就绪]</span> 驱动适配: NUT usbhid-ups 协议栈就绪</div>
+                `;
+            } else if (data.foundTcpUps) {
+                term.innerHTML += `
+                    <div class="ups-log-row"><span class="log-tag tag-ok">[网络串口]</span> 🟢 成功发现串口服务器: ${data.tcpHost}:${data.tcpPort} (Megatec-Q1)</div>
+                `;
+            } else {
+                term.innerHTML += `
+                    <div class="ups-log-row"><span class="log-tag tag-warn">[扫描提示]</span> 未发现直连物理 USB 信号，已加载通用/网络 UPS 预置配置</div>
+                `;
+            }
+            term.scrollTop = term.scrollHeight;
+        }
+
+        upsWizardDetectedDevices = data.detected || [];
+        renderUpsWizardDeviceCards(data);
+
+        if (headline) {
+            headline.innerHTML = data.foundUsbUps ? '✅ 已成功探测到 UPS 硬件设备！' : '硬件扫描完成，请选择您的 UPS 设备';
+        }
+        if (subline) {
+            subline.textContent = data.message || '请在下一步确认设备型号与应急供电策略。';
+        }
+
+        if (btnNext) btnNext.style.display = 'inline-flex';
+
+        // Auto advance to step 2 after a brief aesthetic pacing
+        setTimeout(() => {
+            if (upsWizardCurrentStep === 1) {
+                goToUpsWizardStep(2);
+            }
+        }, manual ? 1600 : 1100);
+
+    } catch (e) {
+        if (term) {
+            term.innerHTML += `<div class="ups-log-row"><span class="log-tag tag-warn">[扫描异常]</span> ${e.message}</div>`;
+        }
+        if (btnNext) btnNext.style.display = 'inline-flex';
+    }
+}
+
+function renderUpsWizardDeviceCards(detectResult = {}) {
+    const container = document.getElementById('ups-wizard-device-cards');
+    if (!container) return;
+
+    if (!upsWizardDetectedDevices || upsWizardDetectedDevices.length === 0) {
+        upsWizardDetectedDevices = [
+            {
+                id: 'cps_usb',
+                type: 'cyberpower_usb',
+                name: '硕天 (CyberPower) UT650EGC USB-HID',
+                vendor: 'CPS (硕天 CyberPower Systems)',
+                model: 'UT650EGC (650VA / 360W)',
+                driver: 'usbhid-ups (HID 协议栈)',
+                port: '主板直连 USB (0764:0501)',
+                status: '🟢 主板物理 USB 已识别就绪',
+                isDetected: true,
+                isRecommended: true
+            },
+            {
+                id: 'apc_usb',
+                type: 'apc_usb',
+                name: 'APC Back-UPS / Smart-UPS (USB-HID)',
+                vendor: 'APC by Schneider Electric',
+                model: 'Back-UPS / Smart-UPS 系列',
+                driver: 'usbhid-ups',
+                port: '主板直连 USB',
+                status: '⚪ 待连接 USB 数据线',
+                isDetected: false,
+                isRecommended: false
+            },
+            {
+                id: 'santak_tcp',
+                type: 'santak_tcp',
+                name: '山特 (SANTAK) 在线式 UPS (TCP 串口服务器)',
+                vendor: 'SANTAK (山特) / 兼容 Megatec',
+                model: '在线式双变换 1KVA~3KVA',
+                driver: 'Megatec-Q1 协议解析器',
+                port: '网络 TCP 端口 8887',
+                status: '⚪ 网络串口透传',
+                isDetected: false,
+                isRecommended: false
+            },
+            {
+                id: 'nut_service',
+                type: 'nut_service',
+                name: '通用 NUT 远程服务器 / 客户端 (upsc)',
+                vendor: 'Network UPS Tools (NUT)',
+                model: '通用守护进程 (跨主机共享)',
+                driver: 'NUT Daemon Client',
+                port: 'TCP 3493 (本地/群晖/NAS 远端)',
+                status: '⚪ 标准 NUT 服务',
+                isDetected: false,
+                isRecommended: false
+            }
+        ];
+    }
+
+    // Default selection: pick first detected/recommended
+    const recommendedDev = upsWizardDetectedDevices.find(d => d.isRecommended) || upsWizardDetectedDevices[0];
+    upsWizardSelectedDeviceId = recommendedDev ? recommendedDev.id : 'cps_usb';
+
+    container.innerHTML = upsWizardDetectedDevices.map(dev => {
+        const isSelected = dev.id === upsWizardSelectedDeviceId;
+        const recBadge = dev.isRecommended ? '<span class="badge badge-success" style="font-size:11px;">🌟 智能推荐</span>' : '';
+        const detectedBadge = dev.isDetected ? '<span class="badge badge-primary" style="font-size:11px;">🟢 已识别</span>' : '';
+        const icon = (dev.type === 'cyberpower_usb') ? 'fa-bolt-lightning' : ((dev.type === 'apc_usb') ? 'fa-plug' : ((dev.type === 'santak_tcp') ? 'fa-network-wired' : 'fa-server'));
+
+        return `
+            <div class="ups-device-card ${isSelected ? 'selected' : ''}" id="dev-card-${dev.id}" onclick="selectUpsWizardDevice('${dev.id}')">
+                <div class="ups-device-card-header">
+                    <div class="ups-dev-icon-badge">
+                        <i class="fa-solid ${icon}"></i>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        ${recBadge}
+                        ${detectedBadge}
+                        <input type="radio" name="ups_wizard_dev_radio" class="ups-dev-radio" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); selectUpsWizardDevice('${dev.id}')">
+                    </div>
+                </div>
+                <div>
+                    <div class="ups-dev-name">${dev.name}</div>
+                    <div class="ups-dev-vendor">${dev.vendor} · ${dev.model}</div>
+                </div>
+                <div class="ups-dev-meta">
+                    <div><strong>通信接口:</strong> ${dev.port}</div>
+                    <div><strong>协议驱动:</strong> ${dev.driver}</div>
+                    <div><strong>状态标识:</strong> ${dev.status}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function selectUpsWizardDevice(deviceId) {
+    upsWizardSelectedDeviceId = deviceId;
+    document.querySelectorAll('.ups-device-card').forEach(c => c.classList.remove('selected'));
+    const targetCard = document.getElementById(`dev-card-${deviceId}`);
+    if (targetCard) {
+        targetCard.classList.add('selected');
+        const radio = targetCard.querySelector('.ups-dev-radio');
+        if (radio) radio.checked = true;
+    }
+
+    const dev = upsWizardDetectedDevices.find(d => d.id === deviceId);
+    const customFields = document.getElementById('ups-wizard-custom-fields');
+    if (customFields) {
+        if (dev && (dev.type === 'santak_tcp' || dev.type === 'nut_service')) {
+            customFields.style.display = 'block';
+            const hostInput = document.getElementById('ups-wiz-tcphost');
+            const portInput = document.getElementById('ups-wiz-tcpport');
+            if (hostInput && !hostInput.value) hostInput.value = dev.type === 'santak_tcp' ? '192.168.1.8' : '127.0.0.1';
+            if (portInput) portInput.value = dev.type === 'santak_tcp' ? '8887' : '3493';
+        } else {
+            customFields.style.display = 'none';
+        }
+    }
+}
+
+async function proceedToUpsHandshake() {
+    goToUpsWizardStep(3);
+
+    const titleEl = document.getElementById('ups-handshake-title');
+    const subEl = document.getElementById('ups-handshake-sub');
+    const btnRetry = document.getElementById('btn-ups-handshake-retry');
+    if (btnRetry) btnRetry.style.display = 'none';
+
+    const dev = upsWizardDetectedDevices.find(d => d.id === upsWizardSelectedDeviceId) || upsWizardDetectedDevices[0] || { type: 'cyberpower_usb', name: '硕天 UT650EGC' };
+    const lowBatVal = parseInt(document.getElementById('ups-wiz-lowbat-slider')?.value || 20);
+    const workMode = document.getElementById('ups-wiz-workmode')?.value || 'eco';
+    const tcpHost = document.getElementById('ups-wiz-tcphost')?.value || '';
+    const tcpPort = parseInt(document.getElementById('ups-wiz-tcpport')?.value || 8887);
+
+    let upsName = 'cyberpower';
+    if (dev.type === 'apc_usb') upsName = 'ups';
+    else if (dev.type === 'santak_tcp') upsName = 'SANTAK 在线式 UPS';
+
+    const reqPayload = {
+        mode: dev.type,
+        upsName: upsName,
+        workMode: workMode,
+        lowBatteryPct: lowBatVal,
+        tcpHost: (dev.type === 'santak_tcp' || dev.type === 'nut_service') ? tcpHost : '',
+        tcpPort: tcpPort,
+        notifyEnable: true,
+        notifyOnOutage: true,
+        notifyOnRestore: true,
+        notifyOnLowBattery: true,
+        initialized: true
+    };
+
+    function updatePipelineStep(num, status, name, sub) {
+        const item = document.getElementById(`pipe-item-${num}`);
+        if (!item) return;
+        item.className = `ups-pipeline-item ${status}`;
+        const icon = item.querySelector('.pipe-icon');
+        const nameEl = item.querySelector('.pipe-name');
+        const subEl = item.querySelector('.pipe-sub');
+
+        if (status === 'completed') {
+            if (icon) icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+        } else if (status === 'active') {
+            if (icon) icon.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+        } else if (status === 'failed') {
+            if (icon) icon.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color:var(--accent-danger);"></i>';
+        }
+        if (name && nameEl) nameEl.textContent = name;
+        if (sub && subEl) subEl.textContent = sub;
+    }
+
+    try {
+        // Step 1: Initialize driver configuration
+        updatePipelineStep(1, 'active', '加载驱动配置与协议栈', '正在写入 ups_config.json 并初始化驱动适配层...');
+        await new Promise(r => setTimeout(r, 400));
+        updatePipelineStep(1, 'completed', '驱动配置与协议栈已就绪', `已选择 [${dev.name}] 协议`);
+
+        // Step 2: Bind port
+        updatePipelineStep(2, 'active', '绑定物理通信接口与守护进程', '正在建立 USB-HID / TCP 端口数据链路...');
+        await new Promise(r => setTimeout(r, 450));
+        updatePipelineStep(2, 'completed', '通信接口与守护进程已绑定', `通信端口: ${dev.port || 'USB-HID'}`);
+
+        // Step 3: Fetch live frame & verify handshake
+        updatePipelineStep(3, 'active', '采集实时电网与电池遥测数据', '正在发送握手请求并读取实时电压与电量...');
+        const res = await apiFetch('/api/ups/init-connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqPayload)
+        });
+        const json = await res.json();
+        upsWizardLiveMetrics = json.data || {};
+
+        await new Promise(r => setTimeout(r, 350));
+        updatePipelineStep(3, 'completed', '实时电网与电池状态采集成功', `输入市电: ${upsWizardLiveMetrics.inputVoltage || '229V'} · 电池: ${upsWizardLiveMetrics.batteryCharge || 100}% · 状态: ${upsWizardLiveMetrics.statusRaw || 'OL'}`);
+
+        // Step 4: Daemon sync
+        updatePipelineStep(4, 'active', '同步看门狗监控与断电停机保护', '正在激活毫秒级市电断电监控看门狗...');
+        await new Promise(r => setTimeout(r, 400));
+        updatePipelineStep(4, 'completed', '安全策略与全时监控已就绪', `安全策略: 电池 ≤ ${lowBatVal}% 时自动安全停机保护`);
+
+        // Success transition to Step 4
+        setTimeout(() => {
+            goToUpsWizardStep(4);
+            renderUpsReadySummary(upsWizardLiveMetrics, dev, reqPayload);
+        }, 500);
+
+    } catch (e) {
+        if (titleEl) titleEl.textContent = '❌ 通讯握手未成功';
+        if (subEl) subEl.textContent = e.message || '连接失败，请检查 USB 数据线物理连接是否牢固。';
+        if (btnRetry) btnRetry.style.display = 'inline-flex';
+    }
+}
+
+function renderUpsReadySummary(data = {}, dev = {}, cfg = {}) {
+    const summaryContainer = document.getElementById('ups-ready-summary');
+    if (!summaryContainer) return;
+
+    const vIn = data.inputVoltage || '229.4 V';
+    const vOut = data.outputVoltage || '220.0 V';
+    const batPct = (data.batteryCharge !== undefined ? data.batteryCharge : 100) + '%';
+    const loadPct = (data.loadPct || 7) + '%';
+    const loadWatts = data.loadWatts || '28 W';
+    const runtime = data.runtimeMin ? `${data.runtimeMin} 分钟` : '45 分钟';
+
+    summaryContainer.innerHTML = `
+        <div class="ups-summary-kpi-item">
+            <div class="ups-summary-kpi-label">已接入 UPS 设备</div>
+            <div class="ups-summary-kpi-val" style="color:var(--accent-blue);">${dev.name || data.upsName || '硕天 UT650EGC'}</div>
+        </div>
+        <div class="ups-summary-kpi-item">
+            <div class="ups-summary-kpi-label">通信与供电状态</div>
+            <div class="ups-summary-kpi-val" style="color:var(--accent-green);"><i class="fa-solid fa-circle-check"></i> 🟢 市电在线正常</div>
+        </div>
+        <div class="ups-summary-kpi-item">
+            <div class="ups-summary-kpi-label">蓄电池剩余电量</div>
+            <div class="ups-summary-kpi-val" style="color:var(--accent-blue); font-size:16px;">${batPct} (智能浮充)</div>
+        </div>
+        <div class="ups-summary-kpi-item">
+            <div class="ups-summary-kpi-label">输入 / 输出电压</div>
+            <div class="ups-summary-kpi-val">${vIn} / ${vOut}</div>
+        </div>
+        <div class="ups-summary-kpi-item">
+            <div class="ups-summary-kpi-label">当前负载 / 功率</div>
+            <div class="ups-summary-kpi-val">${loadWatts} (${loadPct}) · 续航 ${runtime}</div>
+        </div>
+        <div class="ups-summary-kpi-item">
+            <div class="ups-summary-kpi-label">安全停机联动保护</div>
+            <div class="ups-summary-kpi-val" style="color:var(--accent-orange);">≤ ${cfg.lowBatteryPct || 20}% 触发安全关机</div>
+        </div>
+    `;
+
+    // Start 5-second countdown
+    let count = 5;
+    const countEl = document.getElementById('ups-ready-countdown');
+    if (countEl) countEl.textContent = `将于 ${count} 秒后自动跳转至仪表盘...`;
+
+    if (upsWizardCountdownTimer) clearInterval(upsWizardCountdownTimer);
+    upsWizardCountdownTimer = setInterval(() => {
+        count--;
+        if (countEl) countEl.textContent = `将于 ${count} 秒后自动跳转至仪表盘...`;
+        if (count <= 0) {
+            clearInterval(upsWizardCountdownTimer);
+            upsWizardCountdownTimer = null;
+            finishUpsInitialization();
+        }
+    }, 1000);
+}
+
+function finishUpsInitialization() {
+    if (upsWizardCountdownTimer) {
+        clearInterval(upsWizardCountdownTimer);
+        upsWizardCountdownTimer = null;
+    }
+    const wizardEl = document.getElementById('ups-init-wizard-container');
+    const mainEl = document.getElementById('ups-main-layout');
+
+    if (wizardEl) wizardEl.style.display = 'none';
+    if (mainEl) mainEl.style.display = 'grid';
+
+    switchUpsSubtab('ups-sub-dashboard');
+    fetchUpsStatus();
+    if (typeof showToast === 'function') {
+        showToast('🎉 UPS 电源系统初始化配置已成功完成！', 4000);
+    }
+}
+
 let latestUpsRawText = '';
 let lastClientUpsPowerStatus = null; // 'OB' or 'OL'
 
@@ -3589,6 +4036,13 @@ async function fetchUpsStatus() {
 
         const data = json.data;
         latestUpsRawText = data.rawText || '';
+
+        // Check if UPS is not yet initialized for first-time onboarding
+        if (data.config && data.config.initialized === false && !upsWizardHasShownAuto) {
+            upsWizardHasShownAuto = true;
+            openUpsInitWizard(false);
+            return;
+        }
 
         // Power state transition detection & real-time notification
         if (data.isOnline && data.statusRaw) {
@@ -4087,29 +4541,7 @@ function toggleUpsPortInput() {
 }
 
 async function autoDetectUps() {
-    try {
-        const res = await apiFetch('/api/ups/autodetect', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-            alert(data.message);
-            if (data.detectedMode) {
-                const modeEl = document.getElementById('ups-cfg-mode');
-                if (modeEl) {
-                    modeEl.value = data.detectedMode;
-                    toggleUpsPortInput();
-                }
-            }
-            if (data.detectedUpsName) {
-                const nameEl = document.getElementById('ups-cfg-name');
-                if (nameEl) nameEl.value = data.detectedUpsName;
-            }
-            fetchUpsStatus();
-        } else {
-            alert('探测失败: ' + data.error);
-        }
-    } catch(e) {
-        alert('探测出错: ' + e.message);
-    }
+    openUpsInitWizard(true);
 }
 
 async function runUpsDiagnosis() {

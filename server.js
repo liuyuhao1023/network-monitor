@@ -4151,6 +4151,7 @@ function loadUpsConfig() {
     try {
         if (!fs.existsSync(UPS_CONFIG_FILE)) {
             const defCfg = {
+                initialized: false,
                 mode: 'cyberpower_usb',
                 workMode: 'eco',
                 autoEcoRecovery: true,
@@ -4176,6 +4177,7 @@ function loadUpsConfig() {
             return defCfg;
         }
         const cfg = JSON.parse(fs.readFileSync(UPS_CONFIG_FILE, 'utf8'));
+        if (cfg.initialized === undefined) cfg.initialized = false;
         if (!cfg.mode) cfg.mode = 'cyberpower_usb';
         if (!cfg.upsName || cfg.upsName === 'CPS UT650EGC' || cfg.upsName === 'SANTAK 在线式 UPS') cfg.upsName = 'cyberpower';
         if (!cfg.workMode) cfg.workMode = 'eco';
@@ -4190,6 +4192,7 @@ function loadUpsConfig() {
         return cfg;
     } catch (e) {
         return {
+            initialized: false,
             mode: 'cyberpower_usb',
             workMode: 'eco',
             autoEcoRecovery: true,
@@ -5260,6 +5263,15 @@ app.get('/api/ups/energy-report', async (req, res) => {
     }
 });
 
+app.get('/api/ups/config', (req, res) => {
+    try {
+        const config = loadUpsConfig();
+        res.json({ success: true, config });
+    } catch(e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/api/ups/config', async (req, res) => {
     try {
         const currentCfg = loadUpsConfig();
@@ -5267,9 +5279,46 @@ app.post('/api/ups/config', async (req, res) => {
         if (newCfg.mode === 'cyberpower_usb' || newCfg.mode === 'apc_usb') {
             newCfg.tcpHost = '';
         }
+        if (req.body.initialized !== undefined) {
+            newCfg.initialized = !!req.body.initialized;
+        }
         fs.writeFileSync(UPS_CONFIG_FILE, JSON.stringify(newCfg, null, 2), 'utf8');
-        addUpsEvent('ops', 'UPS 配置与推送设置已更新', `更新参数: 模式=${newCfg.mode}, 设备=${newCfg.upsName}, 断电推送=${newCfg.notifyEnable ? '已开启' : '已关闭'}`, 'info');
-        res.json({ success: true, message: 'UPS 配置及推送参数已成功保存！' });
+        addUpsEvent('ops', 'UPS 配置与参数已更新', `更新参数: 模式=${newCfg.mode}, 设备=${newCfg.upsName}, 断电推送=${newCfg.notifyEnable ? '已开启' : '已关闭'}`, 'info');
+        res.json({ success: true, message: 'UPS 配置及参数已成功保存！', config: newCfg });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/ups/init-connect', async (req, res) => {
+    try {
+        const currentCfg = loadUpsConfig();
+        const newCfg = {
+            ...currentCfg,
+            ...req.body,
+            initialized: true
+        };
+        if (newCfg.mode === 'cyberpower_usb' || newCfg.mode === 'apc_usb') {
+            newCfg.tcpHost = '';
+        }
+        fs.writeFileSync(UPS_CONFIG_FILE, JSON.stringify(newCfg, null, 2), 'utf8');
+
+        // Reset runtime watchdog state
+        lastUpsState.initialized = false;
+        upsOfflineConsecutiveCount = 0;
+
+        // Perform live query with new config
+        const livePayload = await queryUpsStatusUnified(newCfg);
+
+        addUpsEvent('system', 'UPS 系统初始化完成', `已完成设备选择与通讯初始化 (${newCfg.upsName || newCfg.mode})，状态: ${livePayload.isOnline ? '🟢 在线通讯就绪' : '🔴 离线/等待连接'}`, livePayload.isOnline ? 'success' : 'warning');
+
+        res.json({
+            success: true,
+            isOnline: !!livePayload.isOnline,
+            config: newCfg,
+            data: livePayload,
+            message: livePayload.isOnline ? '✅ 通讯握手成功！实时数据同步就绪。' : '⚠️ 配置已保存，但暂未收到 UPS 在线响应，请检查 USB 数据线或网络连接。'
+        });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
@@ -5312,53 +5361,62 @@ app.post('/api/ups/autodetect', async (req, res) => {
         let foundUsbUps = false;
         let usbDeviceName = '';
         let detectedMode = 'cyberpower_usb';
-        let detectedUpsName = 'CPS UT650EGC';
+        let detectedUpsName = 'cyberpower';
 
         if (usbOut.includes('0764:0501') || usbOut.toLowerCase().includes('cyberpower') || usbOut.toLowerCase().includes('cps')) {
             foundUsbUps = true;
-            usbDeviceName = 'CPS (硕天 CyberPower) UT650EGC USB-HID UPS';
+            usbDeviceName = '硕天 (CyberPower) UT650EGC USB-HID';
             detectedMode = 'cyberpower_usb';
             detectedUpsName = 'cyberpower';
             detected.push({
+                id: 'cps_usb',
                 type: 'cyberpower_usb',
-                name: '硕天 (CyberPower) UT650EGC USB-HID UPS',
+                name: '硕天 (CyberPower) UT650EGC USB-HID',
                 vendor: 'CPS (硕天 CyberPower Systems)',
                 model: 'UT650EGC (650VA / 360W)',
-                driver: 'usbhid-ups',
-                port: 'auto',
-                status: '🟢 主板 USB 已直连就绪'
+                driver: 'usbhid-ups (HID 协议栈)',
+                port: '主板直连 USB (0764:0501)',
+                status: '🟢 主板物理 USB 已识别就绪',
+                isDetected: true,
+                isRecommended: true
             });
         } else if (usbOut.toLowerCase().includes('american power') || usbOut.includes('051d:')) {
             foundUsbUps = true;
-            usbDeviceName = 'APC Back-UPS / Smart-UPS USB';
+            usbDeviceName = 'APC Back-UPS / Smart-UPS (USB-HID)';
             detectedMode = 'apc_usb';
             detectedUpsName = 'ups';
             detected.push({
+                id: 'apc_usb',
                 type: 'apc_usb',
-                name: 'APC USB-HID UPS',
+                name: 'APC Back-UPS / Smart-UPS (USB-HID)',
                 vendor: 'American Power Conversion (APC)',
-                driver: 'usbhid-ups',
-                port: 'auto',
-                status: '🟢 主板 USB 已直连就绪'
+                model: 'USB-HID Back-UPS',
+                driver: 'usbhid-ups / apcupsd',
+                port: '主板直连 USB (051d)',
+                status: '🟢 主板物理 USB 已识别就绪',
+                isDetected: true,
+                isRecommended: true
             });
         }
 
         // 2. Probe NUT service
+        let nutAvailable = false;
         try {
             const nutData = await fetchNutUpsData();
             if (nutData && nutData.kv) {
+                nutAvailable = true;
                 const nutMfr = nutData.kv['ups.mfr'] || 'CyberPower';
                 const nutModel = nutData.kv['ups.model'] || 'UT650EGC';
                 if (!foundUsbUps) {
                     foundUsbUps = true;
-                    usbDeviceName = `${nutMfr} ${nutModel} (NUT Driver)`;
+                    usbDeviceName = `${nutMfr} ${nutModel} (NUT 驱动)`;
                     detectedMode = 'cyberpower_usb';
                     detectedUpsName = nutData.upsName || 'cyberpower';
                 }
             }
         } catch(e){}
 
-        // 3. Probe TCP Serial Server (only if configured)
+        // 3. Probe TCP Serial Server (if configured or local)
         let foundTcpUps = false;
         let tcpUpsDetail = '';
         const currentCfg = loadUpsConfig();
@@ -5369,16 +5427,76 @@ app.post('/api/ups/autodetect', async (req, res) => {
                     foundTcpUps = true;
                     tcpUpsDetail = `${currentCfg.tcpHost}:${currentCfg.tcpPort || 8887} (SANTAK Megatec-Q1 协议)`;
                     detected.push({
+                        id: 'santak_tcp',
                         type: 'santak_tcp',
                         name: '山特 (SANTAK) 在线式 UPS (TCP 串口服务器)',
                         vendor: 'SANTAK (山特)',
                         model: '在线式双变换 1KVA (24V 电池组)',
-                        endpoint: `${currentCfg.tcpHost}:${currentCfg.tcpPort || 8887}`,
-                        status: '🟢 串口服务器网络在线'
+                        driver: 'Megatec-Q1 Protocol Driver',
+                        port: `串口服务器 ${currentCfg.tcpHost}:${currentCfg.tcpPort || 8887}`,
+                        status: '🟢 网络串口服务器在线响应',
+                        isDetected: true,
+                        isRecommended: !foundUsbUps
                     });
                 }
             } catch(e) {}
         }
+
+        // Always include available standard options if not already detected
+        if (!detected.some(d => d.type === 'cyberpower_usb')) {
+            detected.push({
+                id: 'cps_usb',
+                type: 'cyberpower_usb',
+                name: '硕天 (CyberPower) USB-HID UPS (UT650EGC / CP1500)',
+                vendor: 'CPS (硕天 CyberPower Systems)',
+                model: '通用 USB-HID (650VA ~ 1500VA)',
+                driver: 'usbhid-ups',
+                port: '主板直连 USB',
+                status: '⚪ 待连接 USB 数据线',
+                isDetected: false,
+                isRecommended: false
+            });
+        }
+        if (!detected.some(d => d.type === 'apc_usb')) {
+            detected.push({
+                id: 'apc_usb',
+                type: 'apc_usb',
+                name: 'APC Back-UPS / Smart-UPS (USB-HID)',
+                vendor: 'APC by Schneider Electric',
+                model: 'Back-UPS / Smart-UPS 系列',
+                driver: 'usbhid-ups',
+                port: '主板直连 USB',
+                status: '⚪ 待连接 USB 数据线',
+                isDetected: false,
+                isRecommended: false
+            });
+        }
+        if (!detected.some(d => d.type === 'santak_tcp')) {
+            detected.push({
+                id: 'santak_tcp',
+                type: 'santak_tcp',
+                name: '山特 (SANTAK) / 兼容 Megatec 协议 (TCP 串口服务器)',
+                vendor: 'SANTAK (山特) / 兼容 Megatec',
+                model: '在线式双变换 1KVA~3KVA',
+                driver: 'Megatec-Q1 协议解析器',
+                port: '网络 TCP 端口 (默认 8887)',
+                status: '⚪ 待配置网络串口服务器 IP',
+                isDetected: false,
+                isRecommended: false
+            });
+        }
+        detected.push({
+            id: 'nut_service',
+            type: 'nut_service',
+            name: '通用 NUT 远程服务器 / 客户端 (upsc 通信)',
+            vendor: 'Network UPS Tools (NUT)',
+            model: '通用守护进程 (跨主机共享)',
+            driver: 'NUT Daemon Client',
+            port: 'TCP 3493 (本地/群晖/NAS 远端)',
+            status: nutAvailable ? '🟢 本地 NUT 守护进程运行中' : '⚪ 标准 NUT 服务',
+            isDetected: nutAvailable,
+            isRecommended: false
+        });
 
         let message = '';
         if (foundUsbUps) {
@@ -5386,7 +5504,7 @@ app.post('/api/ups/autodetect', async (req, res) => {
         } else if (foundTcpUps) {
             message = `✅ 成功探测到网络串口服务器 UPS: [${tcpUpsDetail}]`;
         } else {
-            message = '未探测到物理 USB UPS 设备，请确认 USB 数据线已连接或在下方手动配置通信参数。';
+            message = '未探测到物理 USB UPS 设备，请确认 USB 数据线已连接或在下方手动选择设备类型。';
         }
 
         res.json({
