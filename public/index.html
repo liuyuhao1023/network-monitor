@@ -884,10 +884,7 @@
                                     🔵 固定上行输入网口 (WAN / 主管理网口)
                                 </label>
                                 <select id="net-mode-wan-select" class="form-input" style="width:100%; font-family:var(--font-mono, monospace);">
-                                    <option value="lan1" selected>lan1 (主板自带 2.5G / MAC: 00:04:e1:c2:0b:08)</option>
-                                    <option value="lan2">lan2 (主板自带 2.5G / MAC: 00:04:e1:c2:0b:09)</option>
-                                    <option value="enp1s0f0">enp1s0f0 (Intel 千兆网口 1 / MAC: a0:36:9f:4f:57:18)</option>
-                                    <option value="enp1s0f1">enp1s0f1 (Intel 千兆网口 2 / MAC: a0:36:9f:4f:57:19)</option>
+                                    <option value="">正在检测物理网口...</option>
                                 </select>
                             </div>
 
@@ -900,9 +897,7 @@
                                     <button type="button" class="btn btn-link btn-xs" onclick="selectAllLanInterfaces()" style="padding:0; font-size:11px; color:var(--accent-blue);">⚡ 一键勾选其余全部网口</button>
                                 </div>
                                 <div id="net-mode-lan-checkboxes" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px 0;">
-                                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;"><input type="checkbox" value="lan2" checked class="lan-port-chk"> lan2 (2.5G)</label>
-                                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;"><input type="checkbox" value="enp1s0f0" checked class="lan-port-chk"> enp1s0f0 (1G)</label>
-                                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;"><input type="checkbox" value="enp1s0f1" checked class="lan-port-chk"> enp1s0f1 (1G)</label>
+                                    <span style="color:var(--text-secondary); font-size:12px;">正在加载物理网卡列表...</span>
                                 </div>
                             </div>
                         </div>

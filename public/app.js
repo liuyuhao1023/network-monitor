@@ -950,6 +950,38 @@ async function fetchNetwork() {
         const ifaces = jsonIface.data || [];
         const trafficStats = jsonOverview.data?.trafficStatsKB || {};
 
+        // Dynamically Populate Network Mode Working Setup (WAN Select & LAN Checkboxes)
+        const physIfaces = ifaces.filter(i => i.is_physical || i.isPhysical);
+        const wanSelect = document.getElementById('net-mode-wan-select');
+        if (wanSelect && physIfaces.length > 0) {
+            const currentSelected = wanSelect.value || _cachedNetworkMode?.wan_interface;
+            wanSelect.innerHTML = physIfaces.map(i => {
+                const desc = `${i.name} (${i.hardware_spec || '以太网卡'} / MAC: ${i.mac || '-'})`;
+                return `<option value="${i.name}">${desc}</option>`;
+            }).join('');
+            if (currentSelected && physIfaces.some(i => i.name === currentSelected)) {
+                wanSelect.value = currentSelected;
+            } else if (physIfaces.some(i => i.name === _cachedNetworkMode?.wan_interface)) {
+                wanSelect.value = _cachedNetworkMode.wan_interface;
+            } else {
+                wanSelect.value = physIfaces[0].name;
+            }
+        }
+
+        const lanContainer = document.getElementById('net-mode-lan-checkboxes');
+        if (lanContainer && physIfaces.length > 0) {
+            const selectedLans = _cachedNetworkMode?.lan_interfaces || [];
+            const curWan = wanSelect ? wanSelect.value : '';
+            lanContainer.innerHTML = physIfaces.map(i => {
+                const isChecked = selectedLans.includes(i.name) || (selectedLans.length === 0 && i.name !== curWan);
+                return `
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                        <input type="checkbox" value="${i.name}" ${isChecked ? 'checked' : ''} class="lan-port-chk"> ${i.name} (${i.max_speed || i.speed || '以太网'})
+                    </label>
+                `;
+            }).join('');
+        }
+
         // Render Physical & Virtual Interface Cards with Roles
         const grid = document.getElementById('net-interfaces-grid');
         if (grid) {
