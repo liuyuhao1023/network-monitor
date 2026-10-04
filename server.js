@@ -7,7 +7,31 @@ const crypto = require('crypto');
 const fs = require('fs');
 const net = require('net');
 
-const execPromise = util.promisify(exec);
+const rawExecPromise = util.promisify(exec);
+const hasSudo = (() => {
+    try {
+        const { execSync } = require('child_process');
+        execSync('which sudo', { stdio: 'ignore' });
+        return true;
+    } catch(e) {
+        return false;
+    }
+})();
+const isRoot = (typeof process.getuid === 'function' && process.getuid() === 0);
+
+function sanitizeCmd(cmd) {
+    if (typeof cmd !== 'string') return cmd;
+    if (isRoot || !hasSudo) {
+        return cmd.replace(/\bsudo\s+/g, '');
+    }
+    return cmd;
+}
+
+const execPromise = (cmd, opts) => rawExecPromise(sanitizeCmd(cmd), {
+    env: { ...process.env, PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' + (process.env.PATH || '') },
+    ...opts
+});
+
 const app = express();
 const PORT = 10002;
 
@@ -1117,7 +1141,7 @@ function getPhysicalNetworkInterfaces() {
 
 function loadNetworkModeConfig() {
     const phys = getPhysicalNetworkInterfaces();
-    const defaultWan = phys['lan1'] ? 'lan1' : (Object.keys(phys)[0] || 'eth0');
+    let defaultWan = phys['lan1'] ? 'lan1' : (phys['enp4s0'] ? 'enp4s0' : (Object.keys(phys)[0] || 'eth0'));
     const defaultLans = Object.keys(phys).filter(p => p !== defaultWan);
 
     const defaultCfg = {
@@ -1202,20 +1226,30 @@ async function getPortConnectedDevices() {
     const portDevices = {}; // { [portName]: [ { ip, mac, hostname, isGateway } ] }
     try {
         let fdbOut = '', neighOut = '', arpOut = '', leasesOut = '';
-        try { const { stdout } = await execPromise('bridge fdb show'); fdbOut = stdout; } catch(e) {}
-        try { const { stdout } = await execPromise('ip neigh show'); neighOut = stdout; } catch(e) {}
-        try { const { stdout } = await execPromise('cat /proc/net/arp'); arpOut = stdout; } catch(e) {}
-        try { const { stdout } = await execPromise('cat /var/lib/misc/dnsmasq.leases /tmp/dnsmasq.leases 2>/dev/null || true'); leasesOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('bridge fdb show 2>/dev/null || true'); fdbOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('ip neigh show 2>/dev/null || true'); neighOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('cat /proc/net/arp 2>/dev/null || true'); arpOut = stdout; } catch(e) {}
+        try { const { stdout } = await execPromise('cat /var/lib/misc/dnsmasq.leases /tmp/dnsmasq.leases /var/lib/dhcp/dhcpd.leases 2>/dev/null || true'); leasesOut = stdout; } catch(e) {}
 
-        // 1. MAC -> Slave Port from bridge fdb
+        // Non-blocking background subnet sweep to keep ARP hot
+        execPromise('ping -c 1 -b -W 1 192.168.1.255 2>/dev/null || true').catch(() => {});
+
+        // 1. MAC -> Slave Port from bridge fdb (prioritize physical interfaces)
+        const physNics = getPhysicalNetworkInterfaces();
         const macToPort = {};
         for (const line of fdbOut.split('\n')) {
             const parts = line.trim().split(/\s+/);
-            if (parts.length >= 3 && !line.includes('permanent')) {
+            if (parts.length >= 3 && !line.includes('permanent') && !line.includes('self')) {
                 const mac = parts[0].toLowerCase();
                 const devIdx = parts.indexOf('dev');
                 if (devIdx !== -1 && devIdx + 1 < parts.length) {
-                    macToPort[mac] = parts[devIdx + 1];
+                    const port = parts[devIdx + 1];
+                    const isPhys = Boolean(physNics[port]);
+                    if (isPhys) {
+                        macToPort[mac] = port;
+                    } else if (!macToPort[mac] && !port.startsWith('tap') && !port.startsWith('fw')) {
+                        macToPort[mac] = port;
+                    }
                 }
             }
         }
@@ -1233,6 +1267,7 @@ async function getPortConnectedDevices() {
 
         // 3. IP -> MAC mappings
         const ipMap = {};
+        const macToIpMap = {};
         for (const line of arpOut.split('\n').slice(1)) {
             const parts = line.trim().split(/\s+/);
             if (parts.length >= 6) {
@@ -1241,6 +1276,7 @@ async function getPortConnectedDevices() {
                 const dev = parts[5];
                 if (mac !== '00:00:00:00:00:00') {
                     ipMap[ip] = { ip, mac, dev };
+                    macToIpMap[mac] = ip;
                 }
             }
         }
@@ -1252,8 +1288,11 @@ async function getPortConnectedDevices() {
                 const dev = parts[2];
                 const macIdx = parts.indexOf('lladdr') + 1;
                 const mac = parts[macIdx]?.toLowerCase();
-                if (mac && mac !== '00:00:00:00:00:00' && !ip.startsWith('fe80:')) {
-                    if (!ipMap[ip]) ipMap[ip] = { ip, mac, dev };
+                if (mac && mac !== '00:00:00:00:00:00') {
+                    if (!ip.startsWith('fe80:')) {
+                        if (!ipMap[ip]) ipMap[ip] = { ip, mac, dev };
+                        if (!macToIpMap[mac]) macToIpMap[mac] = ip;
+                    }
                 }
             }
         }
@@ -1268,13 +1307,28 @@ async function getPortConnectedDevices() {
             const isGateway = (ip === '192.168.1.1' || ip.endsWith('.1'));
             const hostname = macToHostname[mac] || '';
 
-            // Avoid duplicates
-            if (!portDevices[actualPort].some(d => d.ip === ip)) {
+            if (!portDevices[actualPort].some(d => d.ip === ip || d.mac === mac)) {
                 portDevices[actualPort].push({
                     ip,
                     mac,
                     hostname,
                     isGateway
+                });
+            }
+        }
+
+        // 5. Ensure all learned Layer-2 bridge MACs on slave switch ports (e.g. enp3s0) are preserved
+        for (const [mac, port] of Object.entries(macToPort)) {
+            if (!portDevices[port]) portDevices[port] = [];
+            const alreadyPresent = portDevices[port].some(d => d.mac === mac);
+            if (!alreadyPresent) {
+                const ip = macToIpMap[mac] || '二层交换终端';
+                const hostname = macToHostname[mac] || '';
+                portDevices[port].push({
+                    ip,
+                    mac,
+                    hostname,
+                    isGateway: false
                 });
             }
         }
@@ -3303,7 +3357,16 @@ app.get('/api/system/disks', async (req, res) => {
 
                 try {
                     // Use -n standby to avoid waking up sleeping drives
-                    const { stdout: smartOut } = await execPromise(`sudo smartctl -n standby -i -A /dev/${disk.name} 2>/dev/null || true`);
+                    let { stdout: smartOut } = await execPromise(`smartctl -n standby -i -A /dev/${disk.name} 2>/dev/null || smartctl -i -A /dev/${disk.name} 2>/dev/null || true`);
+                    
+                    // For SAS / SCSI / NVMe drives where -A might not output standard ATA temperature attributes, query -a
+                    if (!smartOut.includes('Temperature') && !smartOut.includes('Current Drive Temperature')) {
+                        try {
+                            const { stdout: smartAll } = await execPromise(`smartctl -n standby -i -a /dev/${disk.name} 2>/dev/null || smartctl -i -a /dev/${disk.name} 2>/dev/null || true`);
+                            if (smartAll) smartOut += '\n' + smartAll;
+                        } catch(e) {}
+                    }
+
                     const inStandby = smartOut.includes('STANDBY mode') || disk.powerState === 'standby' || disk.powerState === 'sleeping';
                     
                     let badSectors = 0;
@@ -3330,12 +3393,18 @@ app.get('/api/system/disks', async (req, res) => {
                                     }
                                 }
                             }
-                        } else if (line.includes('Temperature:') || line.includes('Temperature Sensor 1:')) {
+                        } else if (line.includes('Temperature:') || line.includes('Temperature Sensor 1:') || line.includes('Current Drive Temperature:') || line.includes('Drive Temperature:')) {
                             const m = line.match(/(\d+)\s*(?:C|Celsius)/i);
                             if (m && diskTemp === null) {
                                 const val = parseInt(m[1]);
                                 if (!isNaN(val) && val > 0 && val < 120) diskTemp = val;
                             }
+                        } else if (line.includes('Elements in grown defect list:')) {
+                            const m = line.match(/Elements in grown defect list:\s*(\d+)/i);
+                            if (m) badSectors += parseInt(m[1]) || 0;
+                        } else if (line.includes('Accumulated power on time')) {
+                            const m = line.match(/Accumulated power on time[^\d]*(\d+)/i);
+                            if (m) powerHours = parseInt(m[1]) || powerHours;
                         }
                     }
 
@@ -3517,8 +3586,8 @@ app.get('/api/system/smart', async (req, res) => {
     try {
         const device = req.query.device;
         if (!device) return res.status(400).json({ success: false, error: '缺少设备参数' });
-        // Don't fail if smartctl exits with non-zero (it often does for warnings)
-        const { stdout } = await execPromise(`smartctl -i -A /dev/${device} || true`);
+        // Run smartctl -i -a for full SAS, SATA, and NVMe details
+        const { stdout } = await execPromise(`smartctl -i -a /dev/${device} 2>/dev/null || smartctl -i -A /dev/${device} 2>/dev/null || true`);
         res.json({ success: true, raw: stdout });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -4388,8 +4457,9 @@ function buildNutUpsPayload(config, kv = {}, upscRaw = '') {
     const driverVersion = kv['driver.version'] || '2.8.4';
 
     const inVolt = parseFloat(kv['input.voltage']) || 232.0;
-    const outVolt = parseFloat(kv['output.voltage']) || 233.0;
-    const freq = parseFloat(kv['input.frequency']) || 50.0;
+    const outVolt = parseFloat(kv['output.voltage']) || inVolt || 220.0;
+    let freq = parseFloat(kv['input.frequency']) || 50.0;
+    if (freq > 100) freq = freq / 10.0;
     const battVolt = parseFloat(kv['battery.voltage']) || 13.9;
     const battNominal = parseFloat(kv['battery.voltage.nominal']) || 12;
     const charge = parseInt(kv['battery.charge']) || 96;
