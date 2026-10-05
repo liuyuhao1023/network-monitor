@@ -9769,14 +9769,48 @@ function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
         return;
     }
 
-    const relevant = channels.filter(c => c.isRelevant);
-    const displayList = fanFilterActiveOnly ? (relevant.length > 0 ? relevant : channels) : channels;
+    const activeList = channels.filter(c => (c.rpm || 0) > 0);
+    const activeCount = activeList.length;
+    const totalCount = channels.length;
+
+    // Update Filter Tab labels
+    const btnActive = document.getElementById('btn-fan-filter-active');
+    const btnAll = document.getElementById('btn-fan-filter-all');
+    if (btnActive) btnActive.innerHTML = `🟢 运行中风扇 (${activeCount})`;
+    if (btnAll) btnAll.innerHTML = `🔌 全部插座 (${totalCount})`;
+
+    // Global rotating icon
+    const globalFan = document.getElementById('global-fan-icon');
+    if (globalFan) {
+        if (activeCount > 0) {
+            globalFan.style.animation = 'fanSpin 1.4s linear infinite';
+            globalFan.style.opacity = '1';
+        } else {
+            globalFan.style.animation = 'none';
+            globalFan.style.opacity = '0.45';
+        }
+    }
+
+    const displayList = fanFilterActiveOnly ? activeList : channels;
+
+    if (displayList.length === 0) {
+        grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align:center; padding:32px 20px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px dashed var(--border-color);">
+                <div style="font-size:32px; margin-bottom:8px;">🔌</div>
+                <div style="font-size:14px; font-weight:700; color:var(--text-primary);">当前未检测到运行中的风扇 (0 RPM)</div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:4px; margin-bottom:12px;">风扇插头可能已拔出或完全停转。</div>
+                <button class="btn btn-sm btn-primary" onclick="toggleFanDisplayFilter(false)">切换到【全部主板插座 (${totalCount})】查看所有接口</button>
+            </div>
+        `;
+        return;
+    }
 
     let html = '';
     displayList.forEach(c => {
         const isSysFan = c.isSysFan || c.id === 'pwm1' || c.id === 'pwm6';
         const rpm = c.rpm || 0;
-        const spinDuration = rpm > 0 ? Math.max(0.3, Math.min(2.5, 3000 / rpm)) : 1.2;
+        const isSpinning = rpm > 0;
+        const spinDuration = isSpinning ? Math.max(0.3, Math.min(2.5, 3000 / rpm)) : 1.2;
 
         const mode = c.mode || 'auto';
         const pct = c.pct !== undefined ? c.pct : 60;
@@ -9787,25 +9821,34 @@ function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
         else if (mode === 'curve_hdd') modeBadge = `<span class="badge" style="font-size:11px; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3);">🌡️ 硬盘联动温控 (${pct}%)</span>`;
         else if (mode === 'curve_cpu') modeBadge = `<span class="badge" style="font-size:11px; background:rgba(59,130,246,0.15); color:#3b82f6; border:1px solid rgba(59,130,246,0.3);">🌡️ CPU 联动温控 (${pct}%)</span>`;
 
+        const connBadge = isSpinning 
+            ? `<span class="badge badge-success" style="font-size:10.5px; padding:1px 6px;">🟢 运转中</span>`
+            : `<span class="badge" style="font-size:10.5px; padding:1px 6px; background:rgba(255,255,255,0.05); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.08);">⚪ 未插风扇 / 停转 (0 RPM)</span>`;
+
         html += `
-        <div class="fan-channel-card" id="fan-card-${c.id}">
+        <div class="fan-channel-card" id="fan-card-${c.id}" style="${!isSpinning ? 'opacity: 0.85; border-color: rgba(255,255,255,0.05);' : ''}">
             <div class="fan-channel-header">
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <div class="fan-spinning" style="animation-duration: ${spinDuration}s; font-size:22px; width:36px; height:36px; border-radius:8px; background:${isSysFan ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)'}; display:flex; align-items:center; justify-content:center; color:${isSysFan ? '#10b981' : '#3b82f6'};">🌀</div>
+                    ${isSpinning ? `
+                        <div class="fan-spinning" style="animation: fanSpin ${spinDuration}s linear infinite; font-size:22px; width:36px; height:36px; border-radius:8px; background:${isSysFan ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)'}; display:flex; align-items:center; justify-content:center; color:${isSysFan ? '#10b981' : '#3b82f6'};">🌀</div>
+                    ` : `
+                        <div style="font-size:22px; width:36px; height:36px; border-radius:8px; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; color:var(--text-secondary); opacity:0.4;">🌀</div>
+                    `}
                     <div>
                         <div style="font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                             <span>${escapeHtml(c.name)}</span>
                             <button class="btn btn-sm" style="padding:1px 6px; font-size:10px; background:rgba(255,255,255,0.06); color:var(--text-secondary); border:1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius:4px;" onclick="promptRenameFan('${c.id}', '${escapeHtml(c.name)}')">✏️ 别名</button>
                             ${isSysFan ? '<span style="font-size:10px; background:#10b981; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600;">系统/硬盘笼</span>' : ''}
+                            ${connBadge}
                         </div>
                         <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
-                            插座编号: <strong class="mono" style="color:var(--text-primary);">${c.id.toUpperCase()} (${c.fanId.toUpperCase()})</strong> · 状态: ${modeBadge}
+                            插座编号: <strong class="mono" style="color:var(--text-primary);">${c.id.toUpperCase()} (${c.fanId.toUpperCase()})</strong> · 模式: ${modeBadge}
                         </div>
                     </div>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-size:20px; font-weight:800; font-family:monospace; color:${rpm > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'};">
-                        ${rpm > 0 ? `${rpm} <span style="font-size:12px; font-weight:500;">RPM</span>` : '<span style="font-size:14px; opacity:0.7;">0 RPM</span>'}
+                    <div style="font-size:20px; font-weight:800; font-family:monospace; color:${isSpinning ? 'var(--text-primary)' : 'var(--text-secondary)'};">
+                        ${isSpinning ? `${rpm} <span style="font-size:12px; font-weight:500;">RPM</span>` : '<span style="font-size:14px; opacity:0.6;">0 RPM</span>'}
                     </div>
                     <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">输出功率: <strong>${pct}%</strong></div>
                 </div>

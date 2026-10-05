@@ -1065,16 +1065,17 @@ app.get('/api/system/fans', (req, res) => {
             const mode = saved.mode || (p.enable === 5 ? 'auto' : 'manual');
             const pct = saved.pct !== undefined ? saved.pct : p.pct;
 
-            // Channel is relevant if: fan is actively spinning, or it's a known primary header (SYS_FAN1, CPU_FAN, SYS_FAN2), or user explicitly enabled it
-            const isRelevant = fanMatch.isActive || p.index === 1 || p.index === 2 || p.index === 6 || saved.enabled === true;
+            // Channel is strictly active/relevant when physical RPM is detected (> 0)
+            const isSpinning = (fanMatch.rpm > 0);
+            const isRelevant = isSpinning;
 
             channels.push({
                 id: pwmKey,
                 fanId: fanMatch.fanId,
                 name: saved.name || defaultName,
                 defaultName: defaultName,
-                rpm: fanMatch.rpm,
-                isActive: fanMatch.isActive,
+                rpm: fanMatch.rpm || 0,
+                isActive: isSpinning,
                 pwm: p.pwm,
                 pct: pct,
                 enable: p.enable,
