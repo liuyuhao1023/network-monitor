@@ -1,0 +1,37 @@
+{
+  "pwm1": {
+    "name": "系统风扇 1 (SYS_FAN1)",
+    "mode": "auto",
+    "pct": 60,
+    "target": "hdd",
+    "enabled": true
+  },
+  "pwm2": {
+    "name": "CPU 散热风扇 (CPU_FAN)",
+    "mode": "auto",
+    "pct": 55,
+    "target": "cpu",
+    "enabled": true
+  },
+  "pwm6": {
+    "name": "系统风扇 2 / 硬盘笼 (SYS_FAN2)",
+    "mode": "manual",
+    "pct": 60,
+    "target": "hdd",
+    "enabled": true
+  },
+  "pwm3": {
+    "name": "系统风扇 3 (SYS_FAN3 / AUX)",
+    "mode": "auto",
+    "pct": 50,
+    "target": "hdd",
+    "enabled": false
+  },
+  "pwm4": {
+    "name": "扩展风扇 4 (FAN4)",
+    "mode": "auto",
+    "pct": 50,
+    "target": "hdd",
+    "enabled": false
+  }
+}

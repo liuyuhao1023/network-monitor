@@ -829,17 +829,38 @@ app.get('/api/system/resource-monitor', async (req, res) => {
     } catch(e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ─── 1c. FAN CONTROL & THERMAL MANAGEMENT API (SYS_FAN / CPU_FAN) ─────────────
+// ─── 1c. UNIVERSAL FAN CONTROL & THERMAL MANAGEMENT API ─────────────────────
 const FAN_CONFIG_FILE = path.join(__dirname, 'fan_config.json');
+
+function getMotherboardInfo() {
+    let vendor = '', name = '', bios = '';
+    try {
+        if (fs.existsSync('/sys/class/dmi/id/board_vendor')) vendor = fs.readFileSync('/sys/class/dmi/id/board_vendor', 'utf8').trim();
+        if (fs.existsSync('/sys/class/dmi/id/board_name')) name = fs.readFileSync('/sys/class/dmi/id/board_name', 'utf8').trim();
+        if (fs.existsSync('/sys/class/dmi/id/bios_version')) bios = fs.readFileSync('/sys/class/dmi/id/bios_version', 'utf8').trim();
+    } catch(e) {}
+    if (!name || name === 'Default string') {
+        try {
+            if (fs.existsSync('/sys/class/dmi/id/product_name')) name = fs.readFileSync('/sys/class/dmi/id/product_name', 'utf8').trim();
+        } catch(e) {}
+    }
+    return {
+        vendor: vendor || 'Generic',
+        name: name || 'x86 Motherboard',
+        fullName: `${vendor} ${name}`.trim(),
+        bios: bios || 'Standard BIOS'
+    };
+}
 
 function loadFanConfig() {
     try {
         if (!fs.existsSync(FAN_CONFIG_FILE)) {
             const initial = {
-                pwm6: { name: '硬盘笼散热风扇 (SYS_FAN)', mode: 'manual', pct: 60, target: 'hdd', enabled: true },
+                pwm1: { name: '系统风扇 1 (SYS_FAN1)', mode: 'auto', pct: 60, target: 'hdd', enabled: true },
                 pwm2: { name: 'CPU 散热风扇 (CPU_FAN)', mode: 'auto', pct: 55, target: 'cpu', enabled: true },
-                pwm1: { name: '机箱进风风扇 1 (FAN1)', mode: 'auto', pct: 50, target: 'hdd', enabled: false },
-                pwm3: { name: '机箱出风风扇 2 (FAN3)', mode: 'auto', pct: 50, target: 'hdd', enabled: false }
+                pwm6: { name: '系统风扇 2 / 硬盘笼 (SYS_FAN2)', mode: 'manual', pct: 60, target: 'hdd', enabled: true },
+                pwm3: { name: '扩展风扇 3 (SYS_FAN3 / AUX)', mode: 'auto', pct: 50, target: 'hdd', enabled: false },
+                pwm4: { name: '扩展风扇 4 (SYS_FAN4)', mode: 'auto', pct: 50, target: 'hdd', enabled: false }
             };
             fs.writeFileSync(FAN_CONFIG_FILE, JSON.stringify(initial, null, 2));
             return initial;
@@ -847,8 +868,9 @@ function loadFanConfig() {
         return JSON.parse(fs.readFileSync(FAN_CONFIG_FILE, 'utf8'));
     } catch(e) {
         return {
-            pwm6: { name: '硬盘笼散热风扇 (SYS_FAN)', mode: 'manual', pct: 60, target: 'hdd', enabled: true },
-            pwm2: { name: 'CPU 散热风扇 (CPU_FAN)', mode: 'auto', pct: 55, target: 'cpu', enabled: true }
+            pwm1: { name: '系统风扇 1 (SYS_FAN1)', mode: 'auto', pct: 60, target: 'hdd', enabled: true },
+            pwm2: { name: 'CPU 散热风扇 (CPU_FAN)', mode: 'auto', pct: 55, target: 'cpu', enabled: true },
+            pwm6: { name: '系统风扇 2 / 硬盘笼 (SYS_FAN2)', mode: 'manual', pct: 60, target: 'hdd', enabled: true }
         };
     }
 }
@@ -885,7 +907,11 @@ function getMaxDiskTempC() {
     return 36.0;
 }
 
+// Global flag to prevent timer overwriting during active identify pulse
+let isIdentifyingFan = false;
+
 function applyFanRuleSync() {
+    if (isIdentifyingFan) return;
     const hwPath = findHwmonFanDevice();
     if (!hwPath) return;
 
@@ -938,24 +964,26 @@ app.get('/api/system/fans', (req, res) => {
     try {
         const hwPath = findHwmonFanDevice();
         if (!hwPath) {
-            return res.json({ success: false, error: 'No PWM hardware monitor device found' });
+            return res.json({ success: false, error: '未检测到板载 SuperIO 风扇硬件传感器' });
         }
 
         const nameFile = path.join(hwPath, 'name');
         const chipName = fs.existsSync(nameFile) ? fs.readFileSync(nameFile, 'utf8').trim() : 'Generic SuperIO';
+        const boardInfo = getMotherboardInfo();
         const cfg = loadFanConfig();
         const maxDiskTemp = getMaxDiskTempC();
         const cpuTemp = (typeof getSmoothedCpuTemperature === 'function' ? getSmoothedCpuTemperature().cpuTempC : 38.0) || 38.0;
 
         const channels = [];
-        const channelMeta = {
-            pwm6: { defaultName: '硬盘笼散热风扇 (SYS_FAN)', fanId: 'fan6', isSysFan: true },
-            pwm2: { defaultName: 'CPU 散热风扇 (CPU_FAN)', fanId: 'fan2', isSysFan: false },
-            pwm1: { defaultName: '机箱进风风扇 1 (FAN1)', fanId: 'fan1', isSysFan: false },
-            pwm3: { defaultName: '机箱出风风扇 2 (FAN3)', fanId: 'fan3', isSysFan: false },
-            pwm4: { defaultName: '扩展风扇 4 (FAN4)', fanId: 'fan4', isSysFan: false },
-            pwm5: { defaultName: '扩展风扇 5 (FAN5)', fanId: 'fan5', isSysFan: false },
-            pwm7: { defaultName: '水泵 / 辅助风扇 (PUMP)', fanId: 'fan7', isSysFan: false }
+        // Universal Smart Auto-naming map based on motherboard topology
+        const defaultNames = {
+            pwm1: { name: '系统风扇 1 (SYS_FAN1)', isSys: true, fanId: 'fan1' },
+            pwm2: { name: 'CPU 散热风扇 (CPU_FAN)', isSys: false, fanId: 'fan2' },
+            pwm6: { name: '系统风扇 2 / 硬盘笼 (SYS_FAN2)', isSys: true, fanId: 'fan6' },
+            pwm3: { name: '系统风扇 3 (SYS_FAN3 / AUX)', isSys: true, fanId: 'fan3' },
+            pwm4: { name: '扩展风扇 4 (FAN4)', isSys: false, fanId: 'fan4' },
+            pwm5: { name: '扩展风扇 5 (FAN5)', isSys: false, fanId: 'fan5' },
+            pwm7: { name: '水泵 / 辅助风扇 (PUMP)', isSys: false, fanId: 'fan7' }
         };
 
         for (let i = 1; i <= 7; i++) {
@@ -978,25 +1006,26 @@ app.get('/api/system/fans', (req, res) => {
             try { if (fs.existsSync(enFile)) enableVal = parseInt(fs.readFileSync(enFile, 'utf8').trim()) || 5; } catch(e) {}
 
             const saved = cfg[pwmKey] || {};
-            const meta = channelMeta[pwmKey] || { defaultName: `风扇通道 ${i}`, fanId: `fan${i}`, isSysFan: false };
+            const def = defaultNames[pwmKey] || { name: `风扇插座 ${i} (FAN${i})`, isSys: false, fanId: `fan${i}` };
 
             const mode = saved.mode || (enableVal === 5 ? 'auto' : 'manual');
             const pct = saved.pct !== undefined ? saved.pct : Math.round((pwmVal / 255) * 100);
 
-            // Filter relevant channels (SYS_FAN pwm6, CPU_FAN pwm2, or any with RPM > 0)
-            const isRelevant = meta.isSysFan || rpm > 0 || pwmKey === 'pwm6' || pwmKey === 'pwm2' || saved.enabled;
+            // Mark relevant headers (SYS_FAN1, CPU_FAN, SYS_FAN2, or any with RPM > 0, or explicitly configured)
+            const isRelevant = def.isSys || rpm > 0 || pwmKey === 'pwm1' || pwmKey === 'pwm2' || pwmKey === 'pwm6' || saved.enabled === true;
 
             channels.push({
                 id: pwmKey,
-                fanId: meta.fanId,
-                name: saved.name || meta.defaultName,
+                fanId: def.fanId,
+                name: saved.name || def.name,
+                defaultName: def.name,
                 rpm,
                 pwm: pwmVal,
                 pct,
                 enable: enableVal,
                 mode,
-                target: saved.target || (meta.isSysFan ? 'hdd' : 'cpu'),
-                isSysFan: meta.isSysFan,
+                target: saved.target || (def.isSys ? 'hdd' : 'cpu'),
+                isSysFan: def.isSys,
                 isRelevant
             });
         }
@@ -1005,6 +1034,7 @@ app.get('/api/system/fans', (req, res) => {
             success: true,
             data: {
                 chip: chipName,
+                board: boardInfo,
                 hwmonPath: hwPath,
                 maxDiskTemp,
                 cpuTemp,
@@ -1016,6 +1046,7 @@ app.get('/api/system/fans', (req, res) => {
     }
 });
 
+// Control fan mode & speed
 app.post('/api/system/fans/control', (req, res) => {
     try {
         const { channelId, mode, pct, name, target } = req.body;
@@ -1044,6 +1075,69 @@ app.post('/api/system/fans/control', (req, res) => {
         applyFanRuleSync();
 
         res.json({ success: true, message: '风扇温控配置已保存并生效', data: current });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Identify / Blip fan channel (Spin to 100% for 3.5s so user can immediately hear and distinguish which physical fan it is)
+app.post('/api/system/fans/identify', async (req, res) => {
+    try {
+        const { channelId } = req.body;
+        if (!channelId || !/^[a-zA-Z0-9_]+$/.test(channelId)) {
+            return res.status(400).json({ success: false, error: 'Invalid channel ID' });
+        }
+
+        const hwPath = findHwmonFanDevice();
+        if (!hwPath) {
+            return res.status(500).json({ success: false, error: 'Hardware monitor not found' });
+        }
+
+        const pwmFile = path.join(hwPath, channelId);
+        const enFile = path.join(hwPath, `${channelId}_enable`);
+
+        if (!fs.existsSync(pwmFile)) {
+            return res.status(404).json({ success: false, error: 'Channel node not found' });
+        }
+
+        isIdentifyingFan = true;
+
+        // 1. Force manual mode & 100% speed
+        if (fs.existsSync(enFile)) fs.writeFileSync(enFile, '1');
+        fs.writeFileSync(pwmFile, '255');
+
+        // 2. Schedule restore after 3.5 seconds
+        setTimeout(() => {
+            isIdentifyingFan = false;
+            applyFanRuleSync();
+        }, 3500);
+
+        res.json({
+            success: true,
+            message: `正在对 ${channelId.toUpperCase()} 发送 100% 脉冲转速测试 (3.5秒)，请观察机箱内风扇转动与声音！`
+        });
+    } catch(err) {
+        isIdentifyingFan = false;
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Rename fan channel custom alias
+app.post('/api/system/fans/rename', (req, res) => {
+    try {
+        const { channelId, customName } = req.body;
+        if (!channelId || !/^[a-zA-Z0-9_]+$/.test(channelId)) {
+            return res.status(400).json({ success: false, error: 'Invalid channel ID' });
+        }
+
+        const cfg = loadFanConfig();
+        const current = cfg[channelId] || {};
+        current.name = (customName || '').trim() || current.name || channelId;
+        current.enabled = true;
+        cfg[channelId] = current;
+        saveFanConfig(cfg);
+
+        res.json({ success: true, message: '风扇通道自定义名称已保存', data: current });
     } catch(err) {
         res.status(500).json({ success: false, error: err.message });
     }

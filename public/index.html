@@ -162,19 +162,30 @@
                         <div style="display:flex; align-items:center; gap:10px;">
                             <div class="fan-spinning" id="global-fan-icon" style="font-size:22px; width:38px; height:38px; border-radius:10px; background:rgba(59,130,246,0.12); display:flex; align-items:center; justify-content:center; color:#3b82f6;">🌀</div>
                             <div>
-                                <h3 style="margin:0; font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px;">
-                                    🌀 硬件风扇调速与温控管理
-                                    <span class="badge badge-primary" id="fan-chip-badge" style="font-size:11px; padding:2px 8px;">NCT6798</span>
+                                <h3 style="margin:0; font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                    🌀 硬件风扇调速与多口温控管理
+                                    <span class="badge badge-primary" id="fan-board-badge" style="font-size:11px; padding:2px 8px;">主板自识别中...</span>
+                                    <span class="badge badge-secondary" id="fan-chip-badge" style="font-size:11px; padding:2px 8px;">NCT6798</span>
                                 </h3>
                                 <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;" id="fan-thermal-summary">
                                     当前硬盘最高温度: <strong id="fan-max-disk-temp" style="color:#10b981;">--°C</strong> · CPU 温度: <strong id="fan-cpu-temp" style="color:#3b82f6;">--°C</strong>
                                 </div>
                             </div>
                         </div>
-                        <div style="display:flex; gap:8px; align-items:center;">
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <div style="display:flex; background:rgba(0,0,0,0.15); border-radius:6px; padding:2px; border:1px solid var(--border-color, rgba(255,255,255,0.08));">
+                                <button class="btn btn-sm" id="btn-fan-filter-active" style="padding:3px 8px; font-size:11px; background:var(--accent-blue); color:#fff;" onclick="toggleFanDisplayFilter(true)">只看活跃接口</button>
+                                <button class="btn btn-sm" id="btn-fan-filter-all" style="padding:3px 8px; font-size:11px; background:transparent; color:var(--text-secondary);" onclick="toggleFanDisplayFilter(false)">显示全部插座</button>
+                            </div>
                             <span class="badge badge-success" id="fan-apply-status" style="display:none; transition:all 0.3s ease;">已生效 ✅</span>
                             <button class="btn btn-sm btn-secondary" onclick="fetchFansData()"><i class="fa-solid fa-rotate-right"></i> 刷新转速</button>
                         </div>
+                    </div>
+
+                    <!-- Fan Identification Notification Toast -->
+                    <div id="fan-identify-toast" style="display:none; margin-top:12px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:8px 12px; font-size:12px; color:#f59e0b; align-items:center; justify-content:space-between;">
+                        <span id="fan-identify-msg">⚡ 正在发送测试脉冲...</span>
+                        <span style="font-size:11px; opacity:0.8;">3.5秒后自动恢复</span>
                     </div>
 
                     <!-- Fan Channels Grid -->

@@ -9697,9 +9697,33 @@ async function triggerAllWakeup() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 16. FAN CONTROL & THERMAL MANAGEMENT CLIENT
+// ═════════════════════════════════════════════════════════════════════════════
+// 16. FAN CONTROL & THERMAL MANAGEMENT CLIENT (MULTI-PORT AUTO-DISCOVERY)
 // ═════════════════════════════════════════════════════════════════════════════
 let currentFansData = null;
+let fanFilterActiveOnly = true;
+
+function toggleFanDisplayFilter(onlyActive) {
+    fanFilterActiveOnly = onlyActive;
+    const btnActive = document.getElementById('btn-fan-filter-active');
+    const btnAll = document.getElementById('btn-fan-filter-all');
+    if (btnActive && btnAll) {
+        if (onlyActive) {
+            btnActive.style.background = 'var(--accent-blue)';
+            btnActive.style.color = '#fff';
+            btnAll.style.background = 'transparent';
+            btnAll.style.color = 'var(--text-secondary)';
+        } else {
+            btnAll.style.background = 'var(--accent-blue)';
+            btnAll.style.color = '#fff';
+            btnActive.style.background = 'transparent';
+            btnActive.style.color = 'var(--text-secondary)';
+        }
+    }
+    if (currentFansData) {
+        renderFanChannelsGrid(currentFansData.channels || [], currentFansData.maxDiskTemp, currentFansData.cpuTemp);
+    }
+}
 
 async function fetchFansData() {
     try {
@@ -9709,6 +9733,11 @@ async function fetchFansData() {
 
         currentFansData = json.data;
         const d = json.data;
+
+        const boardBadge = document.getElementById('fan-board-badge');
+        if (boardBadge && d.board) {
+            boardBadge.textContent = d.board.fullName || d.board.name || 'x86 主板';
+        }
 
         const chipBadge = document.getElementById('fan-chip-badge');
         if (chipBadge) chipBadge.textContent = d.chip ? d.chip.toUpperCase() : 'NCT6798';
@@ -9741,11 +9770,11 @@ function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
     }
 
     const relevant = channels.filter(c => c.isRelevant);
-    const displayList = relevant.length > 0 ? relevant : channels.slice(0, 2);
+    const displayList = fanFilterActiveOnly ? (relevant.length > 0 ? relevant : channels) : channels;
 
     let html = '';
     displayList.forEach(c => {
-        const isSysFan = c.isSysFan || c.id === 'pwm6';
+        const isSysFan = c.isSysFan || c.id === 'pwm1' || c.id === 'pwm6';
         const rpm = c.rpm || 0;
         const spinDuration = rpm > 0 ? Math.max(0.3, Math.min(2.5, 3000 / rpm)) : 1.2;
 
@@ -9762,14 +9791,15 @@ function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
         <div class="fan-channel-card" id="fan-card-${c.id}">
             <div class="fan-channel-header">
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <div class="fan-spinning" style="animation-duration: ${spinDuration}s; font-size:22px; width:34px; height:34px; border-radius:8px; background:${isSysFan ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)'}; display:flex; align-items:center; justify-content:center; color:${isSysFan ? '#10b981' : '#3b82f6'};">🌀</div>
+                    <div class="fan-spinning" style="animation-duration: ${spinDuration}s; font-size:22px; width:36px; height:36px; border-radius:8px; background:${isSysFan ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)'}; display:flex; align-items:center; justify-content:center; color:${isSysFan ? '#10b981' : '#3b82f6'};">🌀</div>
                     <div>
-                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
-                            ${escapeHtml(c.name)}
-                            ${isSysFan ? '<span style="font-size:10px; background:#10b981; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600;">硬盘笼专用</span>' : ''}
+                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                            <span>${escapeHtml(c.name)}</span>
+                            <button class="btn btn-sm" style="padding:1px 6px; font-size:10px; background:rgba(255,255,255,0.06); color:var(--text-secondary); border:1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius:4px;" onclick="promptRenameFan('${c.id}', '${escapeHtml(c.name)}')">✏️ 别名</button>
+                            ${isSysFan ? '<span style="font-size:10px; background:#10b981; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600;">系统/硬盘笼</span>' : ''}
                         </div>
                         <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
-                            接口: <strong class="mono">${c.id.toUpperCase()} (${c.fanId.toUpperCase()})</strong> · 状态: ${modeBadge}
+                            插座编号: <strong class="mono" style="color:var(--text-primary);">${c.id.toUpperCase()} (${c.fanId.toUpperCase()})</strong> · 状态: ${modeBadge}
                         </div>
                     </div>
                 </div>
@@ -9777,24 +9807,28 @@ function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
                     <div style="font-size:20px; font-weight:800; font-family:monospace; color:${rpm > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'};">
                         ${rpm > 0 ? `${rpm} <span style="font-size:12px; font-weight:500;">RPM</span>` : '<span style="font-size:14px; opacity:0.7;">0 RPM</span>'}
                     </div>
-                    <div style="font-size:11px; color:var(--text-secondary);">当前输出: <strong>${pct}%</strong></div>
+                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">输出功率: <strong>${pct}%</strong></div>
                 </div>
             </div>
 
-            <!-- Mode Selector Switch -->
-            <div>
-                <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:6px; font-weight:600;">控制模式:</div>
-                <div class="fan-mode-group">
-                    <button class="fan-mode-btn ${mode === 'auto' ? 'active' : ''}" onclick="applyFanMode('${c.id}', 'auto')">
-                        ⚡ 主板自动
-                    </button>
-                    <button class="fan-mode-btn ${mode === 'manual' ? 'active' : ''}" onclick="applyFanMode('${c.id}', 'manual', ${pct})">
-                        🎚️ 手动恒速
-                    </button>
-                    <button class="fan-mode-btn ${mode.startsWith('curve') ? 'active' : ''}" onclick="applyFanMode('${c.id}', '${isSysFan ? 'curve_hdd' : 'curve_cpu'}', ${pct})">
-                        🌡️ ${isSysFan ? '硬盘联动' : 'CPU 联动'}
-                    </button>
+            <!-- Mode Selector Switch & Identify Button -->
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div style="flex:1;">
+                    <div class="fan-mode-group">
+                        <button class="fan-mode-btn ${mode === 'auto' ? 'active' : ''}" onclick="applyFanMode('${c.id}', 'auto')">
+                            ⚡ 主板自动
+                        </button>
+                        <button class="fan-mode-btn ${mode === 'manual' ? 'active' : ''}" onclick="applyFanMode('${c.id}', 'manual', ${pct})">
+                            🎚️ 手动恒速
+                        </button>
+                        <button class="fan-mode-btn ${mode.startsWith('curve') ? 'active' : ''}" onclick="applyFanMode('${c.id}', '${isSysFan ? 'curve_hdd' : 'curve_cpu'}', ${pct})">
+                            🌡️ ${isSysFan ? '硬盘联动' : 'CPU 联动'}
+                        </button>
+                    </div>
                 </div>
+                <button class="btn btn-sm btn-secondary" style="padding:6px 10px; font-size:11px; white-space:nowrap;" onclick="identifyFanChannel('${c.id}', this)" title="点击后将该插座风扇全速鸣转3.5秒，方便你通过声音和转速立刻辨识对应哪个机箱风扇！">
+                    ⚡ 识别测试
+                </button>
             </div>
 
             <!-- Manual Slider Controls -->
@@ -9830,7 +9864,7 @@ function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
 
             <!-- Auto Mode Info Box -->
             <div style="${mode === 'auto' ? 'display:block;' : 'display:none;'} font-size:11.5px; color:var(--text-secondary); padding:4px 2px;">
-                💡 此时由 BIOS / SuperIO 固件原生 SmartFan 算法自动调节转速。
+                💡 此时由主板 BIOS / SuperIO 固件原生 SmartFan 算法自动调节转速。
             </div>
         </div>
         `;
@@ -9884,6 +9918,62 @@ async function applyFanPreset(channelId, pct) {
         }
     } catch(e) {
         console.error('Error applying fan speed preset:', e);
+    }
+}
+
+async function identifyFanChannel(channelId, btnEl) {
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = '⚡ 脉冲加速中...';
+    }
+    const toast = document.getElementById('fan-identify-toast');
+    const toastMsg = document.getElementById('fan-identify-msg');
+    if (toast) {
+        toast.style.display = 'flex';
+        if (toastMsg) toastMsg.textContent = `⚡ 正在对插座 ${channelId.toUpperCase()} 发送 100% 满速脉冲 (3.5秒)，请听/看机箱内哪颗风扇在加速！`;
+    }
+
+    try {
+        const res = await apiFetch('/api/system/fans/identify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId })
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast(json.message, 4000);
+        }
+    } catch(e) {
+        console.error('Error identifying fan:', e);
+    }
+
+    setTimeout(() => {
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = '⚡ 识别测试';
+        }
+        if (toast) toast.style.display = 'none';
+        fetchFansData();
+    }, 3800);
+}
+
+async function promptRenameFan(channelId, currentName) {
+    const newName = prompt(`请输入风扇插座 [${channelId.toUpperCase()}] 的自定义别名\n例如: 吹硬盘笼 1~4 盘位风扇 / 机箱前置风扇:`, currentName || '');
+    if (newName === null) return;
+
+    try {
+        const res = await apiFetch('/api/system/fans/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId, customName: newName.trim() })
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast(`✅ 已更新风扇别名为: ${newName.trim() || channelId}`, 3000);
+            fetchFansData();
+        }
+    } catch(e) {
+        alert('重命名失败: ' + e.message);
     }
 }
 
