@@ -237,7 +237,7 @@ function switchTab(tabId) {
     document.getElementById('current-tab-subtitle').textContent = meta.subtitle || '';
 
     // Load data for the tab
-    if (tabId === 'tab-system')   { fetchSystemInfo(); fetchSources(); fetchResourceMonitor(); }
+    if (tabId === 'tab-system')   { fetchSystemInfo(); fetchSources(); fetchResourceMonitor(); fetchFansData(); }
     if (tabId === 'tab-logs')     { fetchLogs(); fetchServices(); fetchPorts(); }
     if (tabId === 'tab-docker')   { fetchDockerOverview(); fetchDockerContainers(); fetchDockerImages(); }
     if (tabId === 'tab-network')  { fetchNetwork(); fetchSnmpStatus(); fetchRoutes(); fetchNatRules(); fetchVpnStatus(); }
@@ -286,7 +286,7 @@ function bindThemeToggle() {
 function startAutoRefresh() {
     stopAutoRefresh();
     autoRefreshTimer = setInterval(() => {
-        if (activeTab === 'tab-system')   { fetchSystemInfo(); fetchResourceMonitor(); }
+        if (activeTab === 'tab-system')   { fetchSystemInfo(); fetchResourceMonitor(); fetchFansData(); }
         if (activeTab === 'tab-network')  fetchNetwork();
         if (activeTab === 'tab-ups')      { fetchUpsStatus(); const p = document.querySelector('.ups-subpanel.active'); if (p && p.id === 'ups-sub-charts') fetchUpsCharts(); }
         if (activeTab === 'tab-cluster')  { fetchClusterStats(); fetchClusterServers(); }
@@ -9693,6 +9693,205 @@ async function triggerAllWakeup() {
         }
     } catch (e) {
         alert('网络异常: ' + e.message);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 16. FAN CONTROL & THERMAL MANAGEMENT CLIENT
+// ═════════════════════════════════════════════════════════════════════════════
+let currentFansData = null;
+
+async function fetchFansData() {
+    try {
+        const res = await apiFetch('/api/system/fans');
+        const json = await res.json();
+        if (!json.success || !json.data) return;
+
+        currentFansData = json.data;
+        const d = json.data;
+
+        const chipBadge = document.getElementById('fan-chip-badge');
+        if (chipBadge) chipBadge.textContent = d.chip ? d.chip.toUpperCase() : 'NCT6798';
+
+        const maxDiskEl = document.getElementById('fan-max-disk-temp');
+        if (maxDiskEl) {
+            maxDiskEl.textContent = `${d.maxDiskTemp || '--'}°C`;
+            maxDiskEl.style.color = (d.maxDiskTemp >= 45) ? '#ef4444' : ((d.maxDiskTemp >= 40) ? '#f59e0b' : '#10b981');
+        }
+
+        const cpuTempEl = document.getElementById('fan-cpu-temp');
+        if (cpuTempEl) {
+            cpuTempEl.textContent = `${d.cpuTemp || '--'}°C`;
+            cpuTempEl.style.color = (d.cpuTemp >= 65) ? '#ef4444' : ((d.cpuTemp >= 50) ? '#f59e0b' : '#3b82f6');
+        }
+
+        renderFanChannelsGrid(d.channels || [], d.maxDiskTemp, d.cpuTemp);
+    } catch(e) {
+        console.error('Error fetching fan data:', e);
+    }
+}
+
+function renderFanChannelsGrid(channels, maxDiskTemp, cpuTemp) {
+    const grid = document.getElementById('fan-channels-grid');
+    if (!grid) return;
+
+    if (!channels || channels.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-secondary);">未检测到硬件风扇控制通道</div>';
+        return;
+    }
+
+    const relevant = channels.filter(c => c.isRelevant);
+    const displayList = relevant.length > 0 ? relevant : channels.slice(0, 2);
+
+    let html = '';
+    displayList.forEach(c => {
+        const isSysFan = c.isSysFan || c.id === 'pwm6';
+        const rpm = c.rpm || 0;
+        const spinDuration = rpm > 0 ? Math.max(0.3, Math.min(2.5, 3000 / rpm)) : 1.2;
+
+        const mode = c.mode || 'auto';
+        const pct = c.pct !== undefined ? c.pct : 60;
+
+        let modeBadge = '';
+        if (mode === 'auto') modeBadge = '<span class="badge badge-success" style="font-size:11px;">⚡ 主板自动温控</span>';
+        else if (mode === 'manual') modeBadge = `<span class="badge badge-primary" style="font-size:11px;">🎚️ 手动恒速 (${pct}%)</span>`;
+        else if (mode === 'curve_hdd') modeBadge = `<span class="badge" style="font-size:11px; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3);">🌡️ 硬盘联动温控 (${pct}%)</span>`;
+        else if (mode === 'curve_cpu') modeBadge = `<span class="badge" style="font-size:11px; background:rgba(59,130,246,0.15); color:#3b82f6; border:1px solid rgba(59,130,246,0.3);">🌡️ CPU 联动温控 (${pct}%)</span>`;
+
+        html += `
+        <div class="fan-channel-card" id="fan-card-${c.id}">
+            <div class="fan-channel-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="fan-spinning" style="animation-duration: ${spinDuration}s; font-size:22px; width:34px; height:34px; border-radius:8px; background:${isSysFan ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)'}; display:flex; align-items:center; justify-content:center; color:${isSysFan ? '#10b981' : '#3b82f6'};">🌀</div>
+                    <div>
+                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                            ${escapeHtml(c.name)}
+                            ${isSysFan ? '<span style="font-size:10px; background:#10b981; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600;">硬盘笼专用</span>' : ''}
+                        </div>
+                        <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
+                            接口: <strong class="mono">${c.id.toUpperCase()} (${c.fanId.toUpperCase()})</strong> · 状态: ${modeBadge}
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:20px; font-weight:800; font-family:monospace; color:${rpm > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'};">
+                        ${rpm > 0 ? `${rpm} <span style="font-size:12px; font-weight:500;">RPM</span>` : '<span style="font-size:14px; opacity:0.7;">0 RPM</span>'}
+                    </div>
+                    <div style="font-size:11px; color:var(--text-secondary);">当前输出: <strong>${pct}%</strong></div>
+                </div>
+            </div>
+
+            <!-- Mode Selector Switch -->
+            <div>
+                <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:6px; font-weight:600;">控制模式:</div>
+                <div class="fan-mode-group">
+                    <button class="fan-mode-btn ${mode === 'auto' ? 'active' : ''}" onclick="applyFanMode('${c.id}', 'auto')">
+                        ⚡ 主板自动
+                    </button>
+                    <button class="fan-mode-btn ${mode === 'manual' ? 'active' : ''}" onclick="applyFanMode('${c.id}', 'manual', ${pct})">
+                        🎚️ 手动恒速
+                    </button>
+                    <button class="fan-mode-btn ${mode.startsWith('curve') ? 'active' : ''}" onclick="applyFanMode('${c.id}', '${isSysFan ? 'curve_hdd' : 'curve_cpu'}', ${pct})">
+                        🌡️ ${isSysFan ? '硬盘联动' : 'CPU 联动'}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Slider Controls -->
+            <div class="fan-slider-container" style="${mode === 'manual' ? 'display:flex;' : 'display:none;'}">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:12px; font-weight:600; color:var(--text-primary);">手动转速调节</span>
+                    <span style="font-size:13px; font-weight:800; color:var(--accent-blue);" id="fan-slider-val-${c.id}">${pct}%</span>
+                </div>
+                <input type="range" class="fan-range-slider" id="fan-range-${c.id}" min="20" max="100" step="5" value="${pct}" 
+                    oninput="handleFanSliderInput('${c.id}', this.value)" 
+                    onchange="handleFanSliderChange('${c.id}', this.value)">
+                
+                <div class="fan-presets">
+                    <button class="fan-preset-pill" onclick="applyFanPreset('${c.id}', 35)">🌙 静音 35%</button>
+                    <button class="fan-preset-pill" onclick="applyFanPreset('${c.id}', 60)">🍃 标准 60%</button>
+                    <button class="fan-preset-pill" onclick="applyFanPreset('${c.id}', 80)">🚀 强力 80%</button>
+                    <button class="fan-preset-pill" onclick="applyFanPreset('${c.id}', 100)">🌪️ 满速 100%</button>
+                </div>
+            </div>
+
+            <!-- Smart Thermal Curve Info Box -->
+            <div class="fan-smart-curve-info" style="${mode.startsWith('curve') ? 'display:flex;' : 'display:none;'}">
+                <span style="font-size:16px;">🌡️</span>
+                <div>
+                    <div><strong>智能联动策略已生效：</strong></div>
+                    <div style="opacity:0.9; font-size:11.5px; margin-top:2px;">
+                        ${isSysFan 
+                            ? `实时联动最高硬盘温度 (<strong>${maxDiskTemp || 36}°C</strong>) -> 自动执行温控曲线 (静音 35% ~ 满速 100%)` 
+                            : `实时联动 CPU 温度 (<strong>${cpuTemp || 38}°C</strong>) -> 阶梯平滑动态调速`}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto Mode Info Box -->
+            <div style="${mode === 'auto' ? 'display:block;' : 'display:none;'} font-size:11.5px; color:var(--text-secondary); padding:4px 2px;">
+                💡 此时由 BIOS / SuperIO 固件原生 SmartFan 算法自动调节转速。
+            </div>
+        </div>
+        `;
+    });
+
+    grid.innerHTML = html;
+}
+
+function handleFanSliderInput(channelId, val) {
+    const valEl = document.getElementById(`fan-slider-val-${channelId}`);
+    if (valEl) valEl.textContent = `${val}%`;
+}
+
+function handleFanSliderChange(channelId, val) {
+    applyFanPreset(channelId, parseInt(val));
+}
+
+async function applyFanMode(channelId, mode, curPct = 60) {
+    try {
+        const res = await apiFetch('/api/system/fans/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId, mode, pct: curPct })
+        });
+        const json = await res.json();
+        if (json.success) {
+            showFanAppliedBadge();
+            fetchFansData();
+        }
+    } catch(e) {
+        console.error('Error setting fan mode:', e);
+    }
+}
+
+async function applyFanPreset(channelId, pct) {
+    const slider = document.getElementById(`fan-range-${channelId}`);
+    if (slider) slider.value = pct;
+    const valEl = document.getElementById(`fan-slider-val-${channelId}`);
+    if (valEl) valEl.textContent = `${pct}%`;
+
+    try {
+        const res = await apiFetch('/api/system/fans/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId, mode: 'manual', pct })
+        });
+        const json = await res.json();
+        if (json.success) {
+            showFanAppliedBadge();
+            fetchFansData();
+        }
+    } catch(e) {
+        console.error('Error applying fan speed preset:', e);
+    }
+}
+
+function showFanAppliedBadge() {
+    const badge = document.getElementById('fan-apply-status');
+    if (badge) {
+        badge.style.display = 'inline-block';
+        setTimeout(() => { badge.style.display = 'none'; }, 2500);
     }
 }
 

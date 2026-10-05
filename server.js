@@ -829,6 +829,226 @@ app.get('/api/system/resource-monitor', async (req, res) => {
     } catch(e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ─── 1c. FAN CONTROL & THERMAL MANAGEMENT API (SYS_FAN / CPU_FAN) ─────────────
+const FAN_CONFIG_FILE = path.join(__dirname, 'fan_config.json');
+
+function loadFanConfig() {
+    try {
+        if (!fs.existsSync(FAN_CONFIG_FILE)) {
+            const initial = {
+                pwm6: { name: '硬盘笼散热风扇 (SYS_FAN)', mode: 'manual', pct: 60, target: 'hdd', enabled: true },
+                pwm2: { name: 'CPU 散热风扇 (CPU_FAN)', mode: 'auto', pct: 55, target: 'cpu', enabled: true },
+                pwm1: { name: '机箱进风风扇 1 (FAN1)', mode: 'auto', pct: 50, target: 'hdd', enabled: false },
+                pwm3: { name: '机箱出风风扇 2 (FAN3)', mode: 'auto', pct: 50, target: 'hdd', enabled: false }
+            };
+            fs.writeFileSync(FAN_CONFIG_FILE, JSON.stringify(initial, null, 2));
+            return initial;
+        }
+        return JSON.parse(fs.readFileSync(FAN_CONFIG_FILE, 'utf8'));
+    } catch(e) {
+        return {
+            pwm6: { name: '硬盘笼散热风扇 (SYS_FAN)', mode: 'manual', pct: 60, target: 'hdd', enabled: true },
+            pwm2: { name: 'CPU 散热风扇 (CPU_FAN)', mode: 'auto', pct: 55, target: 'cpu', enabled: true }
+        };
+    }
+}
+
+function saveFanConfig(cfg) {
+    try {
+        fs.writeFileSync(FAN_CONFIG_FILE, JSON.stringify(cfg, null, 2));
+    } catch(e) {}
+}
+
+function findHwmonFanDevice() {
+    try {
+        if (!fs.existsSync('/sys/class/hwmon')) return null;
+        const list = fs.readdirSync('/sys/class/hwmon');
+        for (const item of list) {
+            const hPath = path.join('/sys/class/hwmon', item);
+            try {
+                const files = fs.readdirSync(hPath);
+                if (files.some(f => f.startsWith('pwm') && !f.includes('_'))) {
+                    return hPath;
+                }
+            } catch(e) {}
+        }
+    } catch(e) {}
+    return null;
+}
+
+function getMaxDiskTempC() {
+    try {
+        const dTemps = getDiskTemperaturesFromSysfs();
+        const vals = Object.values(dTemps).filter(v => typeof v === 'number' && v > 0 && v < 120);
+        if (vals.length > 0) return Math.max(...vals);
+    } catch(e) {}
+    return 36.0;
+}
+
+function applyFanRuleSync() {
+    const hwPath = findHwmonFanDevice();
+    if (!hwPath) return;
+
+    const cfg = loadFanConfig();
+    const maxDiskTemp = getMaxDiskTempC();
+    const cpuTemp = (typeof getSmoothedCpuTemperature === 'function' ? getSmoothedCpuTemperature().cpuTempC : 38.0) || 38.0;
+
+    for (const [pwmKey, c] of Object.entries(cfg)) {
+        if (!c || c.enabled === false) continue;
+        const pwmFile = path.join(hwPath, pwmKey);
+        const enFile = path.join(hwPath, `${pwmKey}_enable`);
+        if (!fs.existsSync(pwmFile)) continue;
+
+        try {
+            if (c.mode === 'auto') {
+                if (fs.existsSync(enFile)) fs.writeFileSync(enFile, '5');
+            } else if (c.mode === 'manual') {
+                if (fs.existsSync(enFile)) fs.writeFileSync(enFile, '1');
+                const targetVal = Math.max(20, Math.min(255, Math.round((c.pct || 60) * 2.55)));
+                fs.writeFileSync(pwmFile, String(targetVal));
+            } else if (c.mode === 'curve_hdd') {
+                if (fs.existsSync(enFile)) fs.writeFileSync(enFile, '1');
+                let targetPct = 35;
+                if (maxDiskTemp >= 48) targetPct = 100;
+                else if (maxDiskTemp >= 44) targetPct = 80;
+                else if (maxDiskTemp >= 40) targetPct = 60;
+                else if (maxDiskTemp >= 36) targetPct = 45;
+                else targetPct = 35;
+                const targetVal = Math.max(20, Math.min(255, Math.round(targetPct * 2.55)));
+                fs.writeFileSync(pwmFile, String(targetVal));
+            } else if (c.mode === 'curve_cpu') {
+                if (fs.existsSync(enFile)) fs.writeFileSync(enFile, '1');
+                let targetPct = 40;
+                if (cpuTemp >= 70) targetPct = 100;
+                else if (cpuTemp >= 55) targetPct = 75;
+                else if (cpuTemp >= 45) targetPct = 55;
+                else targetPct = 40;
+                const targetVal = Math.max(20, Math.min(255, Math.round(targetPct * 2.55)));
+                fs.writeFileSync(pwmFile, String(targetVal));
+            }
+        } catch(e) {}
+    }
+}
+
+// Background smart fan controller ticker (runs every 4 seconds)
+setInterval(applyFanRuleSync, 4000);
+setTimeout(applyFanRuleSync, 2000);
+
+app.get('/api/system/fans', (req, res) => {
+    try {
+        const hwPath = findHwmonFanDevice();
+        if (!hwPath) {
+            return res.json({ success: false, error: 'No PWM hardware monitor device found' });
+        }
+
+        const nameFile = path.join(hwPath, 'name');
+        const chipName = fs.existsSync(nameFile) ? fs.readFileSync(nameFile, 'utf8').trim() : 'Generic SuperIO';
+        const cfg = loadFanConfig();
+        const maxDiskTemp = getMaxDiskTempC();
+        const cpuTemp = (typeof getSmoothedCpuTemperature === 'function' ? getSmoothedCpuTemperature().cpuTempC : 38.0) || 38.0;
+
+        const channels = [];
+        const channelMeta = {
+            pwm6: { defaultName: '硬盘笼散热风扇 (SYS_FAN)', fanId: 'fan6', isSysFan: true },
+            pwm2: { defaultName: 'CPU 散热风扇 (CPU_FAN)', fanId: 'fan2', isSysFan: false },
+            pwm1: { defaultName: '机箱进风风扇 1 (FAN1)', fanId: 'fan1', isSysFan: false },
+            pwm3: { defaultName: '机箱出风风扇 2 (FAN3)', fanId: 'fan3', isSysFan: false },
+            pwm4: { defaultName: '扩展风扇 4 (FAN4)', fanId: 'fan4', isSysFan: false },
+            pwm5: { defaultName: '扩展风扇 5 (FAN5)', fanId: 'fan5', isSysFan: false },
+            pwm7: { defaultName: '水泵 / 辅助风扇 (PUMP)', fanId: 'fan7', isSysFan: false }
+        };
+
+        for (let i = 1; i <= 7; i++) {
+            const pwmKey = `pwm${i}`;
+            const pwmFile = path.join(hwPath, pwmKey);
+            if (!fs.existsSync(pwmFile)) continue;
+
+            const fanFile = path.join(hwPath, `fan${i}_input`);
+            const enFile = path.join(hwPath, `${pwmKey}_enable`);
+
+            let rpm = 0;
+            if (fs.existsSync(fanFile)) {
+                try { rpm = parseInt(fs.readFileSync(fanFile, 'utf8').trim()) || 0; } catch(e) {}
+            }
+
+            let pwmVal = 128;
+            try { pwmVal = parseInt(fs.readFileSync(pwmFile, 'utf8').trim()) || 0; } catch(e) {}
+
+            let enableVal = 5;
+            try { if (fs.existsSync(enFile)) enableVal = parseInt(fs.readFileSync(enFile, 'utf8').trim()) || 5; } catch(e) {}
+
+            const saved = cfg[pwmKey] || {};
+            const meta = channelMeta[pwmKey] || { defaultName: `风扇通道 ${i}`, fanId: `fan${i}`, isSysFan: false };
+
+            const mode = saved.mode || (enableVal === 5 ? 'auto' : 'manual');
+            const pct = saved.pct !== undefined ? saved.pct : Math.round((pwmVal / 255) * 100);
+
+            // Filter relevant channels (SYS_FAN pwm6, CPU_FAN pwm2, or any with RPM > 0)
+            const isRelevant = meta.isSysFan || rpm > 0 || pwmKey === 'pwm6' || pwmKey === 'pwm2' || saved.enabled;
+
+            channels.push({
+                id: pwmKey,
+                fanId: meta.fanId,
+                name: saved.name || meta.defaultName,
+                rpm,
+                pwm: pwmVal,
+                pct,
+                enable: enableVal,
+                mode,
+                target: saved.target || (meta.isSysFan ? 'hdd' : 'cpu'),
+                isSysFan: meta.isSysFan,
+                isRelevant
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                chip: chipName,
+                hwmonPath: hwPath,
+                maxDiskTemp,
+                cpuTemp,
+                channels
+            }
+        });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/system/fans/control', (req, res) => {
+    try {
+        const { channelId, mode, pct, name, target } = req.body;
+        if (!channelId || !/^[a-zA-Z0-9_]+$/.test(channelId)) {
+            return res.status(400).json({ success: false, error: 'Invalid channel ID' });
+        }
+
+        const hwPath = findHwmonFanDevice();
+        if (!hwPath) {
+            return res.status(500).json({ success: false, error: 'Hardware monitor not found' });
+        }
+
+        const cfg = loadFanConfig();
+        const current = cfg[channelId] || {};
+
+        if (mode) current.mode = mode;
+        if (pct !== undefined) current.pct = Math.max(10, Math.min(100, parseInt(pct) || 50));
+        if (name) current.name = name;
+        if (target) current.target = target;
+        current.enabled = true;
+
+        cfg[channelId] = current;
+        saveFanConfig(cfg);
+
+        // Immediately apply to hardware
+        applyFanRuleSync();
+
+        res.json({ success: true, message: '风扇温控配置已保存并生效', data: current });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 app.get('/api/system/processes', async (req, res) => {
     try {
