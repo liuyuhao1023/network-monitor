@@ -830,9 +830,29 @@ function onLanPortAliasChange(iface, alias) {
     _cachedNetworkMode.lan_modes[iface].alias = alias.trim();
 }
 
-function renderLanModesGrid() {
+let _lanGridRendered = false;
+
+function renderLanModesGrid(force = false) {
     const container = document.getElementById('lan-modes-grid');
     if (!container || !_cachedNetworkMode) return;
+
+    // Do not rebuild DOM if already rendered and user may be interacting, unless forced
+    if (_lanGridRendered && !force) {
+        // Just update dynamic status text without rebuilding inputs
+        const curWan = _cachedNetworkMode.wan_interface || 'enp4s0';
+        const lanDetails = _cachedNetworkMode.lanDetails || {};
+        for (const [iface, det] of Object.entries(lanDetails)) {
+            if (iface === curWan) continue;
+            const statusEl = document.getElementById(`lan-link-status-${iface}`);
+            if (statusEl) {
+                const isIdle = det.isIdle !== false;
+                statusEl.innerHTML = !isIdle 
+                    ? `<span style="color:var(--accent-green); font-size:11.5px; font-weight:600;">● 链路已连接 (UP)</span>`
+                    : `<span style="color:var(--text-secondary); font-size:11.5px;">○ 网口闲置 (DOWN / 待接线)</span>`;
+            }
+        }
+        return;
+    }
 
     const curWan = _cachedNetworkMode.wan_interface || 'enp4s0';
     const lanDetails = _cachedNetworkMode.lanDetails || {};
@@ -850,11 +870,8 @@ function renderLanModesGrid() {
         const cfg = lanModes[iface] || { mode: 'switch', isolated: false, alias: '' };
         const mode = cfg.mode || 'switch';
         const isIdle = detail.isIdle !== false;
-        const carrier = detail.carrier || 0;
-        const isPveBridge = detail.isPveBridge;
         const mac = detail.mac || '-';
 
-        // PVE Priority & Idle status pill
         let priorityPill = '';
         if (isIdle) {
             priorityPill = `
@@ -891,11 +908,10 @@ function renderLanModesGrid() {
                     </div>
 
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:12px; background:var(--bg-primary); padding:6px 10px; border-radius:6px;">
-                        <span>${linkStatusPill}</span>
+                        <span id="lan-link-status-${iface}">${linkStatusPill}</span>
                         <span style="font-size:11px; color:var(--text-secondary);">${detail.priorityDesc || ''}</span>
                     </div>
 
-                    <!-- Mode Options for This LAN -->
                     <label style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:6px; display:block;">
                         ⚙️ 独立工作模式选择:
                     </label>
@@ -918,7 +934,6 @@ function renderLanModesGrid() {
                         </button>
                     </div>
 
-                    <!-- Custom IP Subnet Configuration (Expandable) -->
                     <div id="lan-params-${iface}" style="display:${(mode === 'router' || mode === 'standalone') ? 'block' : 'none'}; background:rgba(0,0,0,0.15); padding:10px; border-radius:6px; border:1px dashed var(--border-color); margin-top:8px;">
                         <div style="font-size:11px; font-weight:700; color:var(--accent-purple); margin-bottom:6px;">
                             🔧 ${mode === 'router' ? '私网路由网关参数' : '独立网卡静态 IP 参数'}
@@ -938,14 +953,23 @@ function renderLanModesGrid() {
             </div>
         `;
     }).join('');
+
+    _lanGridRendered = true;
 }
 
-async function fetchNetworkMode() {
+async function fetchNetworkMode(forceRender = false) {
     try {
         const res = await apiFetch('/api/network/mode');
         const json = await res.json();
         if (!json.success || !json.data) return;
         const d = json.data;
+
+        // Preserve current user edit state in memory if user has edited
+        if (_cachedNetworkMode && _cachedNetworkMode.lan_modes && !forceRender) {
+            d.lan_modes = { ...d.lan_modes, ..._cachedNetworkMode.lan_modes };
+            if (_cachedNetworkMode.wan_interface) d.wan_interface = _cachedNetworkMode.wan_interface;
+        }
+
         _cachedNetworkMode = d;
 
         // 1. Update Status Badge
@@ -956,23 +980,25 @@ async function fetchNetworkMode() {
             statusBadge.innerHTML = `<span class="badge badge-success" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-circle-check"></i> WAN [${wan}] + ${lanCount} 个独立 LAN 模式运行中</span>`;
         }
 
-        // 2. Update WAN Selector
+        // 2. Update WAN Selector only if not currently focused
         const wanSelect = document.getElementById('net-mode-wan-select');
-        if (wanSelect && d.lanDetails) {
+        if (wanSelect && d.lanDetails && document.activeElement !== wanSelect) {
             const currentSelected = wanSelect.value || d.wan_interface;
-            wanSelect.innerHTML = Object.keys(d.lanDetails).map(name => {
-                const det = d.lanDetails[name];
-                const isDown = det.isIdle;
-                const desc = `${name} (${isDown ? '○ 闲置待接线' : '● 在线连接'} / MAC: ${det.mac || '-'})`;
-                return `<option value="${name}">${desc}</option>`;
-            }).join('');
+            if (!wanSelect.options || wanSelect.options.length <= 1) {
+                wanSelect.innerHTML = Object.keys(d.lanDetails).map(name => {
+                    const det = d.lanDetails[name];
+                    const isDown = det.isIdle;
+                    const desc = `${name} (${isDown ? '○ 闲置待接线' : '● 在线连接'} / MAC: ${det.mac || '-'})`;
+                    return `<option value="${name}">${desc}</option>`;
+                }).join('');
+            }
             if (d.wan_interface) {
                 wanSelect.value = d.wan_interface;
             }
         }
 
-        // 3. Render Independent LAN Mode Cards
-        renderLanModesGrid();
+        // 3. Render Independent LAN Mode Cards gently
+        renderLanModesGrid(forceRender);
 
     } catch(e) {
         console.error('fetchNetworkMode error:', e);
@@ -1017,7 +1043,7 @@ async function applyNetworkWorkingMode() {
         const json = await res.json();
         if (json.success) {
             alert('✅ ' + (json.message || '网络工作模式配置成功！已即时生效并持久化保存。'));
-            await fetchNetworkMode();
+            await fetchNetworkMode(true);
             fetchNetwork();
             if (typeof fetchDhcpLeases === 'function') fetchDhcpLeases();
         } else {
@@ -1036,7 +1062,7 @@ async function applyNetworkWorkingMode() {
 async function fetchNetwork() {
     try {
         // Fetch Mode and Interfaces in parallel
-        await fetchNetworkMode();
+        await fetchNetworkMode(true);
 
         const [resIface, resOverview] = await Promise.all([
             apiFetch('/api/network/interfaces'),
