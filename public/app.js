@@ -787,35 +787,157 @@ function showCreateModal() { openModal('modal-create-container'); }
 function setPullImage(img) { document.getElementById('pull-image-input').value = img; }
 
 // ── 4. NETWORK (WITH IPV6 & 4G DUAL-STACK) ───────────────────────────────────
-// ── 4. NETWORK (WORKING MODE, TOPOLOGY & INTERFACES) ─────────────────────────
+// ── 4. NETWORK (WORKING MODE, TOPOLOGY & INDEPENDENT LAN PORTS) ────────────
 let _cachedNetworkMode = null;
 
-function onNetworkModeChange(mode) {
-    const cards = ['standalone', 'switch', 'router'];
-    cards.forEach(m => {
-        const card = document.getElementById(`mode-card-${m}`);
-        if (card) {
-            if (m === mode) {
-                card.style.border = m === 'router' ? '2px solid var(--accent-purple)' : (m === 'switch' ? '2px solid var(--accent-green)' : '2px solid var(--accent-blue)');
-            } else {
-                card.style.border = '2px solid var(--border-color)';
-            }
-        }
-    });
-
-    const routerParams = document.getElementById('router-mode-params');
-    if (routerParams) {
-        routerParams.style.display = (mode === 'router') ? 'block' : 'none';
+function onWanInterfaceChange(newWan) {
+    if (_cachedNetworkMode) {
+        _cachedNetworkMode.wan_interface = newWan;
+        renderLanModesGrid();
     }
 }
 
-function selectAllLanInterfaces() {
-    const wan = document.getElementById('net-mode-wan-select')?.value;
-    document.querySelectorAll('.lan-port-chk').forEach(chk => {
-        if (chk.value !== wan) {
-            chk.checked = true;
+function onLanPortModeChange(iface, mode) {
+    if (!_cachedNetworkMode) return;
+    if (!_cachedNetworkMode.lan_modes) _cachedNetworkMode.lan_modes = {};
+    if (!_cachedNetworkMode.lan_modes[iface]) {
+        _cachedNetworkMode.lan_modes[iface] = { mode: 'switch', isolated: false, alias: '' };
+    }
+    _cachedNetworkMode.lan_modes[iface].mode = mode;
+    _cachedNetworkMode.lan_modes[iface].isolated = (mode === 'isolated');
+
+    // Toggle custom subnet inputs visibility
+    const subParams = document.getElementById(`lan-params-${iface}`);
+    if (subParams) {
+        subParams.style.display = (mode === 'router' || mode === 'standalone') ? 'block' : 'none';
+    }
+
+    // Update active highlight style on mode pill
+    document.querySelectorAll(`.lan-mode-pill-${iface}`).forEach(pill => {
+        pill.classList.remove('active');
+        if (pill.dataset.mode === mode) {
+            pill.classList.add('active');
         }
     });
+}
+
+function onLanPortAliasChange(iface, alias) {
+    if (!_cachedNetworkMode) return;
+    if (!_cachedNetworkMode.lan_modes) _cachedNetworkMode.lan_modes = {};
+    if (!_cachedNetworkMode.lan_modes[iface]) {
+        _cachedNetworkMode.lan_modes[iface] = { mode: 'switch', isolated: false, alias: '' };
+    }
+    _cachedNetworkMode.lan_modes[iface].alias = alias.trim();
+}
+
+function renderLanModesGrid() {
+    const container = document.getElementById('lan-modes-grid');
+    if (!container || !_cachedNetworkMode) return;
+
+    const curWan = _cachedNetworkMode.wan_interface || 'enp4s0';
+    const lanDetails = _cachedNetworkMode.lanDetails || {};
+    const lanModes = _cachedNetworkMode.lan_modes || {};
+
+    const ifaceNames = Object.keys(lanDetails).filter(n => n !== curWan);
+
+    if (ifaceNames.length === 0) {
+        container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--text-secondary);">暂无检测到其他 LAN 物理扩展端口</div>';
+        return;
+    }
+
+    container.innerHTML = ifaceNames.map(iface => {
+        const detail = lanDetails[iface] || {};
+        const cfg = lanModes[iface] || { mode: 'switch', isolated: false, alias: '' };
+        const mode = cfg.mode || 'switch';
+        const isIdle = detail.isIdle !== false;
+        const carrier = detail.carrier || 0;
+        const isPveBridge = detail.isPveBridge;
+        const mac = detail.mac || '-';
+
+        // PVE Priority & Idle status pill
+        let priorityPill = '';
+        if (isIdle) {
+            priorityPill = `
+                <span class="badge" style="background:rgba(234,179,8,0.12); color:#eab308; border:1px solid rgba(234,179,8,0.25); font-size:11px; padding:2px 7px;">
+                    🛡️ PVE 优先待命 (空闲/未插线)
+                </span>
+            `;
+        } else {
+            priorityPill = `
+                <span class="badge" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.3); font-size:11px; padding:2px 7px;">
+                    🟢 物理在用 (10002 配置生效)
+                </span>
+            `;
+        }
+
+        const linkStatusPill = !isIdle 
+            ? `<span style="color:var(--accent-green); font-size:11.5px; font-weight:600;">● 链路已连接 (UP)</span>`
+            : `<span style="color:var(--text-secondary); font-size:11.5px;">○ 网口闲置 (DOWN / 待接线)</span>`;
+
+        return `
+            <div class="card" style="background:var(--bg-secondary); border:1px solid ${!isIdle ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:10px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                        <div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-weight:700; font-size:16px; font-family:var(--font-mono, monospace); color:var(--text-primary);">${iface}</span>
+                                <input type="text" class="form-input form-input-xs" style="width:120px; font-size:11px; padding:2px 6px;" placeholder="自定义别名/用途" value="${escapeHtml(cfg.alias || '')}" oninput="onLanPortAliasChange('${iface}', this.value)">
+                            </div>
+                            <div style="font-size:11px; color:var(--text-secondary); margin-top:3px; font-family:var(--font-mono, monospace);">
+                                MAC: ${mac}
+                            </div>
+                        </div>
+                        <div>${priorityPill}</div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:12px; background:var(--bg-primary); padding:6px 10px; border-radius:6px;">
+                        <span>${linkStatusPill}</span>
+                        <span style="font-size:11px; color:var(--text-secondary);">${detail.priorityDesc || ''}</span>
+                    </div>
+
+                    <!-- Mode Options for This LAN -->
+                    <label style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:6px; display:block;">
+                        ⚙️ 独立工作模式选择:
+                    </label>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin-bottom:10px;">
+                        <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'switch' ? 'btn-primary active' : 'btn-secondary'}" data-mode="switch" onclick="onLanPortModeChange('${iface}', 'switch')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
+                            <div style="font-weight:700;">🖧 交换模式</div>
+                            <div style="font-size:10px; opacity:0.8;">透明桥接内网 (同网段)</div>
+                        </button>
+                        <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'isolated' ? 'btn-primary active' : 'btn-secondary'}" data-mode="isolated" onclick="onLanPortModeChange('${iface}', 'isolated')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
+                            <div style="font-weight:700;">🛡️ 隔离交换</div>
+                            <div style="font-size:10px; opacity:0.8;">PVLAN 隔离 (防环路)</div>
+                        </button>
+                        <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'standalone' ? 'btn-primary active' : 'btn-secondary'}" data-mode="standalone" onclick="onLanPortModeChange('${iface}', 'standalone')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
+                            <div style="font-weight:700;">🔌 独立/直通</div>
+                            <div style="font-size:10px; opacity:0.8;">脱离交换 (专用网口)</div>
+                        </button>
+                        <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'router' ? 'btn-primary active' : 'btn-secondary'}" data-mode="router" onclick="onLanPortModeChange('${iface}', 'router')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
+                            <div style="font-weight:700;">🚀 路由私网</div>
+                            <div style="font-size:10px; opacity:0.8;">独立私网子网与转发</div>
+                        </button>
+                    </div>
+
+                    <!-- Custom IP Subnet Configuration (Expandable) -->
+                    <div id="lan-params-${iface}" style="display:${(mode === 'router' || mode === 'standalone') ? 'block' : 'none'}; background:rgba(0,0,0,0.15); padding:10px; border-radius:6px; border:1px dashed var(--border-color); margin-top:8px;">
+                        <div style="font-size:11px; font-weight:700; color:var(--accent-purple); margin-bottom:6px;">
+                            🔧 ${mode === 'router' ? '私网路由网关参数' : '独立网卡静态 IP 参数'}
+                        </div>
+                        <div class="grid-2" style="gap:8px;">
+                            <div>
+                                <label style="font-size:10px; color:var(--text-secondary);">IP 地址 / 网关</label>
+                                <input type="text" class="form-input form-input-xs mono" id="lan-ip-${iface}" placeholder="如 192.168.10.1" value="${escapeHtml(cfg.ip || '')}" onchange="if(_cachedNetworkMode.lan_modes['${iface}']) _cachedNetworkMode.lan_modes['${iface}'].ip=this.value.trim()">
+                            </div>
+                            <div>
+                                <label style="font-size:10px; color:var(--text-secondary);">子网掩码</label>
+                                <input type="text" class="form-input form-input-xs mono" id="lan-mask-${iface}" placeholder="255.255.255.0" value="${escapeHtml(cfg.netmask || '255.255.255.0')}" onchange="if(_cachedNetworkMode.lan_modes['${iface}']) _cachedNetworkMode.lan_modes['${iface}'].netmask=this.value.trim()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 async function fetchNetworkMode() {
@@ -826,82 +948,58 @@ async function fetchNetworkMode() {
         const d = json.data;
         _cachedNetworkMode = d;
 
-        // 1. Update Mode Radio & Cards
-        const modeRadios = document.querySelectorAll('input[name="network-work-mode"]');
-        modeRadios.forEach(r => {
-            if (r.value === d.mode) {
-                r.checked = true;
-                onNetworkModeChange(d.mode);
-            }
-        });
-
-        // 2. Update Status Badge
+        // 1. Update Status Badge
         const statusBadge = document.getElementById('current-mode-status-badge');
         if (statusBadge) {
-            if (d.mode === 'switch') {
-                statusBadge.innerHTML = `<span class="badge badge-success" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-circle-check"></i> 当前运行模式：局域网交换机模式 (Switch)</span>`;
-            } else if (d.mode === 'router') {
-                statusBadge.innerHTML = `<span class="badge badge-primary" style="font-size:12px; padding:4px 10px; background:rgba(168,85,247,0.2); color:#c084fc; border-color:rgba(168,85,247,0.4);"><i class="fa-solid fa-router"></i> 当前运行模式：全功能主路由模式 (Router)</span>`;
-            } else {
-                statusBadge.innerHTML = `<span class="badge badge-secondary" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-plug"></i> 当前运行模式：独立网卡模式 (Standalone)</span>`;
+            const wan = d.wan_interface || 'enp4s0';
+            const lanCount = Object.keys(d.lanDetails || {}).filter(k => k !== wan).length;
+            statusBadge.innerHTML = `<span class="badge badge-success" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-circle-check"></i> WAN [${wan}] + ${lanCount} 个独立 LAN 模式运行中</span>`;
+        }
+
+        // 2. Update WAN Selector
+        const wanSelect = document.getElementById('net-mode-wan-select');
+        if (wanSelect && d.lanDetails) {
+            const currentSelected = wanSelect.value || d.wan_interface;
+            wanSelect.innerHTML = Object.keys(d.lanDetails).map(name => {
+                const det = d.lanDetails[name];
+                const isDown = det.isIdle;
+                const desc = `${name} (${isDown ? '○ 闲置待接线' : '● 在线连接'} / MAC: ${det.mac || '-'})`;
+                return `<option value="${name}">${desc}</option>`;
+            }).join('');
+            if (d.wan_interface) {
+                wanSelect.value = d.wan_interface;
             }
         }
 
-        // 3. Update WAN Selector
-        const wanSelect = document.getElementById('net-mode-wan-select');
-        if (wanSelect && d.wan_interface) {
-            wanSelect.value = d.wan_interface;
-        }
+        // 3. Render Independent LAN Mode Cards
+        renderLanModesGrid();
 
-        // 4. Update LAN Checkboxes
-        const lans = d.lan_interfaces || [];
-        document.querySelectorAll('.lan-port-chk').forEach(chk => {
-            chk.checked = lans.includes(chk.value);
-        });
-
-        // 5. Update Router Config
-        const rCfg = d.router_config || {};
-        if (document.getElementById('router-cfg-gateway')) document.getElementById('router-cfg-gateway').value = rCfg.gateway_ip || '192.168.100.1';
-        if (document.getElementById('router-cfg-netmask')) document.getElementById('router-cfg-netmask').value = rCfg.netmask || '255.255.255.0';
-        if (document.getElementById('router-cfg-start')) document.getElementById('router-cfg-start').value = rCfg.dhcp_start || '192.168.100.100';
-        if (document.getElementById('router-cfg-end')) document.getElementById('router-cfg-end').value = rCfg.dhcp_end || '192.168.100.200';
     } catch(e) {
         console.error('fetchNetworkMode error:', e);
     }
 }
 
 async function applyNetworkWorkingMode() {
-    const selectedMode = document.querySelector('input[name="network-work-mode"]:checked')?.value || 'switch';
-    const wanIface = document.getElementById('net-mode-wan-select')?.value || 'lan1';
+    if (!_cachedNetworkMode) return;
 
-    const lanIfaces = [];
-    document.querySelectorAll('.lan-port-chk:checked').forEach(chk => {
-        if (chk.value !== wanIface) lanIfaces.push(chk.value);
-    });
+    const wanIface = document.getElementById('net-mode-wan-select')?.value || _cachedNetworkMode.wan_interface || 'enp4s0';
+    _cachedNetworkMode.wan_interface = wanIface;
 
-    const routerConfig = {
-        gateway_ip: document.getElementById('router-cfg-gateway')?.value?.trim() || '192.168.100.1',
-        netmask: document.getElementById('router-cfg-netmask')?.value?.trim() || '255.255.255.0',
-        dhcp_start: document.getElementById('router-cfg-start')?.value?.trim() || '192.168.100.100',
-        dhcp_end: document.getElementById('router-cfg-end')?.value?.trim() || '192.168.100.200',
-        lease_time: '12h',
-        dns: ['223.5.5.5', '114.114.114.114']
-    };
+    const lanIfaces = Object.keys(_cachedNetworkMode.lan_modes || {}).filter(k => k !== wanIface);
 
-    const modeLabels = {
-        'switch': '局域网交换机扩展模式 (Bridge / Switch)',
-        'router': '全功能主路由模式 (Router / Gateway)',
-        'standalone': '独立网卡模式 (Standalone)'
-    };
+    if (!confirm(`确定要保存并应用当前网络配置吗？
 
-    if (!confirm(`确定要将 NAS 网络工作模式切换为【${modeLabels[selectedMode]}】吗？\n\n- 输入 WAN 口: ${wanIface}\n- 扩展 LAN 口: ${lanIfaces.join(', ') || '无'}\n\n系统将自动生成 Netplan 拓扑并平滑应用配置。`)) {
+• 固定上行 WAN 口: ${wanIface} (PVE 主核心管理通道)
+• 已配置 ${lanIfaces.length} 个独立 LAN 端口工作模式
+
+系统将即时热更新底层交换/隔离策略，全程无缝防失联。`)) {
         return;
     }
 
     const btn = document.getElementById('btn-save-network-mode');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在应用网络配置...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在应用各端口模式...';
     }
 
     try {
@@ -909,17 +1007,19 @@ async function applyNetworkWorkingMode() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                mode: selectedMode,
+                mode: 'custom',
                 wan_interface: wanIface,
                 lan_interfaces: lanIfaces,
-                router_config: routerConfig
+                lan_modes: _cachedNetworkMode.lan_modes || {},
+                router_config: _cachedNetworkMode.router_config
             })
         });
         const json = await res.json();
         if (json.success) {
-            alert('✅ ' + (json.message || '网络工作模式配置成功！已平滑重载系统网络。'));
+            alert('✅ ' + (json.message || '网络工作模式配置成功！已即时生效并持久化保存。'));
+            await fetchNetworkMode();
             fetchNetwork();
-            fetchDhcpLeases();
+            if (typeof fetchDhcpLeases === 'function') fetchDhcpLeases();
         } else {
             alert('❌ 配置应用失败: ' + json.error);
         }

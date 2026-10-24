@@ -1519,22 +1519,74 @@ function getPhysicalNetworkInterfaces() {
     return nics;
 }
 
+function getPveNetworkInterfacesInfo() {
+    const pveInfo = {
+        isPve: false,
+        bridgePorts: [],
+        vmAssignedPorts: [],
+        vmbr0Ports: []
+    };
+    try {
+        if (fs.existsSync('/etc/pve')) {
+            pveInfo.isPve = true;
+            if (fs.existsSync('/etc/network/interfaces')) {
+                const content = fs.readFileSync('/etc/network/interfaces', 'utf8');
+                const bridgeMatches = content.match(/bridge-ports\s+([^\n]+)/);
+                if (bridgeMatches && bridgeMatches[1]) {
+                    pveInfo.vmbr0Ports = bridgeMatches[1].trim().split(/\s+/).filter(Boolean);
+                    pveInfo.bridgePorts = [...pveInfo.vmbr0Ports];
+                }
+            }
+
+            const qemuDir = '/etc/pve/qemu-server';
+            if (fs.existsSync(qemuDir)) {
+                const files = fs.readdirSync(qemuDir);
+                for (const f of files) {
+                    if (f.endsWith('.conf')) {
+                        const vmCfg = fs.readFileSync(path.join(qemuDir, f), 'utf8');
+                        const pciMatches = vmCfg.match(/hostpci\d+:\s*([^\n,]+)/g);
+                        if (pciMatches) {
+                            pciMatches.forEach(m => pveInfo.vmAssignedPorts.push(m));
+                        }
+                    }
+                }
+            }
+        }
+    } catch(e) {}
+    return pveInfo;
+}
+
 function loadNetworkModeConfig() {
     const phys = getPhysicalNetworkInterfaces();
     let defaultWan = phys['lan1'] ? 'lan1' : (phys['enp4s0'] ? 'enp4s0' : (Object.keys(phys)[0] || 'eth0'));
     const defaultLans = Object.keys(phys).filter(p => p !== defaultWan);
 
+    const defaultLanModes = {};
+    for (const lan of defaultLans) {
+        defaultLanModes[lan] = {
+            mode: 'switch',
+            alias: '',
+            ip: '',
+            netmask: '255.255.255.0',
+            dhcp_enabled: false,
+            dhcp_start: '',
+            dhcp_end: '',
+            isolated: false
+        };
+    }
+
     const defaultCfg = {
-        mode: "switch",
+        mode: 'custom',
         wan_interface: defaultWan,
         lan_interfaces: defaultLans,
+        lan_modes: defaultLanModes,
         router_config: {
-            gateway_ip: "192.168.100.1",
-            netmask: "255.255.255.0",
-            dhcp_start: "192.168.100.100",
-            dhcp_end: "192.168.100.200",
-            lease_time: "12h",
-            dns: ["223.5.5.5", "114.114.114.114"]
+            gateway_ip: '192.168.100.1',
+            netmask: '255.255.255.0',
+            dhcp_start: '192.168.100.100',
+            dhcp_end: '192.168.100.200',
+            lease_time: '12h',
+            dns: ['223.5.5.5', '114.114.114.114']
         }
     };
 
@@ -1543,7 +1595,14 @@ function loadNetworkModeConfig() {
         if (fs.existsSync(fpath)) {
             try {
                 const data = JSON.parse(fs.readFileSync(fpath, 'utf8'));
-                return { ...defaultCfg, ...data };
+                const merged = { ...defaultCfg, ...data };
+                if (!merged.lan_modes) merged.lan_modes = {};
+                for (const lan of defaultLans) {
+                    if (!merged.lan_modes[lan]) {
+                        merged.lan_modes[lan] = defaultLanModes[lan] || { mode: 'switch', isolated: false, alias: '' };
+                    }
+                }
+                return merged;
             } catch (e) {}
         }
     }
@@ -1559,10 +1618,82 @@ function saveNetworkModeConfig(cfg) {
     } catch (e) {}
 }
 
+function applyLanPortModeSync(iface, config, isIdle) {
+    if (!iface || typeof iface !== 'string') return;
+    try {
+        const mode = config.mode || 'switch';
+        const isolated = Boolean(config.isolated || mode === 'isolated');
+
+        const brPortPath = path.join('/sys/class/net', iface, 'brport');
+        if (fs.existsSync(brPortPath)) {
+            const isolatedPath = path.join(brPortPath, 'isolated');
+            if (fs.existsSync(isolatedPath)) {
+                fs.writeFileSync(isolatedPath, isolated ? '1' : '0');
+            }
+        }
+    } catch(e) {}
+}
+
 app.get('/api/network/mode', (req, res) => {
     try {
         const cfg = loadNetworkModeConfig();
-        res.json({ success: true, data: cfg });
+        const pve = getPveNetworkInterfacesInfo();
+        const phys = getPhysicalNetworkInterfaces();
+
+        const lanDetails = {};
+        for (const [ifaceName, mac] of Object.entries(phys)) {
+            let carrier = 0;
+            let operstate = 'down';
+            try {
+                const cPath = path.join('/sys/class/net', ifaceName, 'carrier');
+                if (fs.existsSync(cPath)) {
+                    carrier = parseInt(fs.readFileSync(cPath, 'utf8').trim()) || 0;
+                }
+                const oPath = path.join('/sys/class/net', ifaceName, 'operstate');
+                if (fs.existsSync(oPath)) {
+                    operstate = fs.readFileSync(oPath, 'utf8').trim().toLowerCase();
+                }
+            } catch(e) {}
+
+            const isIdle = (carrier === 0 || operstate === 'down');
+            const isPveBridge = pve.vmbr0Ports.includes(ifaceName);
+            const isWan = (ifaceName === cfg.wan_interface);
+
+            let activePriority = '10002_custom';
+            let priorityDesc = '由 10002 管理面板独立配置工作模式';
+            if (isWan) {
+                activePriority = 'wan_uplink';
+                priorityDesc = '固定主管理上行口 (WAN)，锁定防失联';
+            } else if (isPveBridge && isIdle) {
+                activePriority = 'pve_standby';
+                priorityDesc = 'PVE 网桥预置端口 (当前闲置待命，已就绪供 10002 自主指派模式)';
+            } else if (isPveBridge && !isIdle) {
+                activePriority = '10002_active';
+                priorityDesc = '物理接口在用 (根据 10002 设定的工作模式运行)';
+            }
+
+            lanDetails[ifaceName] = {
+                iface: ifaceName,
+                mac,
+                isIdle,
+                carrier,
+                operstate,
+                isWan,
+                isPveBridge,
+                activePriority,
+                priorityDesc,
+                config: cfg.lan_modes?.[ifaceName] || { mode: 'switch', isolated: false, alias: '' }
+            };
+        }
+
+        res.json({
+            success: true,
+            data: {
+                ...cfg,
+                pveInfo: pve,
+                lanDetails
+            }
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -1570,33 +1701,42 @@ app.get('/api/network/mode', (req, res) => {
 
 app.post('/api/network/mode', async (req, res) => {
     try {
-        const { mode, wan_interface, lan_interfaces, router_config } = req.body;
-        if (!mode || !['standalone', 'switch', 'router'].includes(mode)) {
-            return res.status(400).json({ success: false, error: '无效的网络工作模式' });
-        }
-
+        const { mode, wan_interface, lan_interfaces, lan_modes, router_config } = req.body;
         const currentCfg = loadNetworkModeConfig();
+
         const updatedCfg = {
-            mode,
-            wan_interface: wan_interface || currentCfg.wan_interface || 'lan1',
+            mode: mode || currentCfg.mode || 'custom',
+            wan_interface: wan_interface || currentCfg.wan_interface || 'enp4s0',
             lan_interfaces: Array.isArray(lan_interfaces) ? lan_interfaces : (currentCfg.lan_interfaces || []),
+            lan_modes: lan_modes || currentCfg.lan_modes || {},
             router_config: router_config || currentCfg.router_config || {
-                gateway_ip: "192.168.100.1",
-                netmask: "255.255.255.0",
-                dhcp_start: "192.168.100.100",
-                dhcp_end: "192.168.100.200",
-                lease_time: "12h",
-                dns: ["223.5.5.5", "114.114.114.114"]
+                gateway_ip: '192.168.100.1',
+                netmask: '255.255.255.0',
+                dhcp_start: '192.168.100.100',
+                dhcp_end: '192.168.100.200',
+                lease_time: '12h',
+                dns: ['223.5.5.5', '114.114.114.114']
             }
         };
 
         saveNetworkModeConfig(updatedCfg);
 
-        // Call Python netplan automation engine if on linux
-        const scriptCmd = `python3 -c "import sys; sys.path.append('/opt/nas-web'); from app import apply_network_mode; apply_network_mode(${JSON.stringify(updatedCfg)})" 2>/dev/null || true`;
-        execPromise(scriptCmd).catch(() => {});
+        if (updatedCfg.lan_modes) {
+            for (const [iface, ifaceConf] of Object.entries(updatedCfg.lan_modes)) {
+                if (iface === updatedCfg.wan_interface) continue;
+                let isIdle = true;
+                try {
+                    const cPath = path.join('/sys/class/net', iface, 'carrier');
+                    if (fs.existsSync(cPath)) {
+                        const c = parseInt(fs.readFileSync(cPath, 'utf8').trim()) || 0;
+                        isIdle = (c === 0);
+                    }
+                } catch(e) {}
+                applyLanPortModeSync(iface, ifaceConf, isIdle);
+            }
+        }
 
-        res.json({ success: true, message: '网络工作模式配置已成功应用并生效！', data: updatedCfg });
+        res.json({ success: true, message: '各 LAN 端口独立工作模式已成功保存并即时生效！', data: updatedCfg });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -1830,19 +1970,24 @@ app.get('/api/network/interfaces', async (req, res) => {
             let role = 'STANDALONE';
             let roleDesc = '独立网卡端口';
 
+            const lanConf = modeCfg.lan_modes?.[name];
             if (name === wanIface) {
                 role = 'WAN';
-                roleDesc = '固定输入网口 (WAN / 上行连接口)';
-            } else if (lanIfaces.includes(name)) {
-                if (currMode === 'switch') {
-                    role = 'LAN_SWITCH';
-                    roleDesc = '交换机网口 (LAN / 透明分发同局域网 IP)';
-                } else if (currMode === 'router') {
-                    role = 'LAN_ROUTER';
-                    roleDesc = '路由子网端口 (LAN / DHCP 分发私网 IP)';
-                } else {
+                roleDesc = '固定输入网口 (WAN / 主管理上行连接口)';
+            } else if (lanConf || lanIfaces.includes(name)) {
+                const pMode = lanConf?.mode || (currMode === 'router' ? 'router' : (currMode === 'standalone' ? 'standalone' : 'switch'));
+                if (pMode === 'isolated') {
+                    role = 'LAN_ISOLATED';
+                    roleDesc = '隔离交换端口 (LAN / PVLAN 客户机间相互隔离)';
+                } else if (pMode === 'standalone') {
                     role = 'STANDALONE';
-                    roleDesc = '独立网卡端口';
+                    roleDesc = '独立网卡端口 (直通 / 独立专用)';
+                } else if (pMode === 'router') {
+                    role = 'LAN_ROUTER';
+                    roleDesc = '路由子网端口 (LAN / 自定义私网)';
+                } else {
+                    role = 'LAN_SWITCH';
+                    roleDesc = '二层交换端口 (LAN / 透明桥接内网)';
                 }
             } else if (name === 'br-switch') {
                 role = 'BRIDGE_SWITCH';

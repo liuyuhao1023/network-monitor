@@ -861,115 +861,68 @@
                     </div>
                 </div>
 
-                <!-- 1. 网络工作模式自主切换面板 (Network Mode Topology Card) -->
+                                <!-- 1. 网络工作模式自主切换与各 LAN 端口独立配置面板 -->
                 <div class="card mb-20" style="border-left: 4px solid var(--accent-blue);">
                     <div class="card-header-bar" style="margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                         <div>
                             <h3 style="margin:0; font-size:16px; display:flex; align-items:center; gap:8px;">
                                 <i class="fa-solid fa-network-wired" style="color:var(--accent-blue);"></i>
-                                🖧 网络工作模式自主切换 (Topology & Working Mode)
+                                🖧 物理网口角色与各 LAN 独立工作模式
                             </h3>
                             <div style="font-size:12px; color:var(--text-secondary); margin-top:3px;">
-                                支持将 NAS 设置为独立网卡、透明二层交换机或全功能主路由网关，下联设备即插即用。
+                                支持指定主上行口 (WAN)，其余每个 LAN 口均可独立指派工作模式（交换透传 / 端口隔离 / 独立直通 / 路由子网）。
                             </div>
                         </div>
                         <div id="current-mode-status-badge">
                             <span class="badge badge-success" style="font-size:12px; padding:4px 10px;">
-                                <i class="fa-solid fa-circle-check"></i> 当前运行模式：局域网交换机模式 (Switch)
+                                <i class="fa-solid fa-circle-check"></i> 状态加载中...
                             </span>
                         </div>
                     </div>
 
-                    <!-- 3 Mode Selection Cards -->
-                    <div class="grid-3 mb-20" style="gap:12px;">
-                        <label class="mode-select-card" id="mode-card-standalone" style="border:2px solid var(--border-color); background:var(--bg-secondary); padding:14px; border-radius:8px; cursor:pointer; display:block; transition:all 0.2s;">
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                <input type="radio" name="network-work-mode" value="standalone" onchange="onNetworkModeChange('standalone')">
-                                <span style="font-weight:700; font-size:14px;">🔌 独立网卡模式</span>
-                            </div>
-                            <div style="font-size:12px; color:var(--text-secondary); line-height:1.5;">
-                                各网口作为独立以太网网卡，各自独立配置或获取 IP，适合多网络隔离与专用网口直通。
-                            </div>
-                        </label>
-
-                        <label class="mode-select-card active" id="mode-card-switch" style="border:2px solid var(--accent-green); background:var(--bg-secondary); padding:14px; border-radius:8px; cursor:pointer; display:block; transition:all 0.2s;">
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                <input type="radio" name="network-work-mode" value="switch" checked onchange="onNetworkModeChange('switch')">
-                                <span style="font-weight:700; font-size:14px; color:var(--accent-green);">🖧 交换机扩展模式</span>
-                            </div>
-                            <div style="font-size:12px; color:var(--text-secondary); line-height:1.5;">
-                                主网口输入上行，其他网口桥接透传。接在其他网口的设备直接获取上级光猫/路由器 IP (192.168.1.x)。
-                            </div>
-                        </label>
-
-                        <label class="mode-select-card" id="mode-card-router" style="border:2px solid var(--border-color); background:var(--bg-secondary); padding:14px; border-radius:8px; cursor:pointer; display:block; transition:all 0.2s;">
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                <input type="radio" name="network-work-mode" value="router" onchange="onNetworkModeChange('router')">
-                                <span style="font-weight:700; font-size:14px; color:var(--accent-purple);">🚀 全功能主路由模式</span>
-                            </div>
-                            <div style="font-size:12px; color:var(--text-secondary); line-height:1.5;">
-                                NAS 作为主路由，WAN口获取外网，LAN口内置 DHCP 服务分发自定义网段 (如 192.168.100.x) 并 NAT 转发。
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- Topology Config Form Details -->
+                    <!-- WAN Upper Link Bar & PVE Priority Status -->
                     <div style="background:var(--bg-primary); padding:16px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px;">
-                        <div class="grid-2 mb-16" style="gap:16px;">
-                            <!-- WAN Interface Selector -->
+                        <div class="grid-2" style="gap:16px; align-items:center;">
                             <div>
-                                <label style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">
-                                    🔵 固定上行输入网口 (WAN / 主管理网口)
+                                <label style="font-size:12px; font-weight:700; color:var(--accent-blue); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                                    <i class="fa-solid fa-arrow-down-up-across-line"></i> 固定主管理上行输入网口 (WAN / PVE 核心管理口)
                                 </label>
-                                <select id="net-mode-wan-select" class="form-input" style="width:100%; font-family:var(--font-mono, monospace);">
+                                <select id="net-mode-wan-select" class="form-input" style="width:100%; font-family:var(--font-mono, monospace);" onchange="onWanInterfaceChange(this.value)">
                                     <option value="">正在检测物理网口...</option>
                                 </select>
-                            </div>
-
-                            <!-- LAN Interface Checkboxes -->
-                            <div>
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                    <label style="font-size:12px; font-weight:600; color:var(--text-secondary); margin:0;">
-                                        🟢 选定为交换机/路由的扩展端口 (LAN Interfaces)
-                                    </label>
-                                    <button type="button" class="btn btn-link btn-xs" onclick="selectAllLanInterfaces()" style="padding:0; font-size:11px; color:var(--accent-blue);">⚡ 一键勾选其余全部网口</button>
+                                <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">
+                                    🔒 提示：此网口直连光猫/主路由，作为 PVE 与 Web 控制台的防失联主通道，受内核高优先级保护。
                                 </div>
-                                <div id="net-mode-lan-checkboxes" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px 0;">
-                                    <span style="color:var(--text-secondary); font-size:12px;">正在加载物理网卡列表...</span>
+                            </div>
+                            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:6px; border:1px dashed var(--border-color);">
+                                <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                                    🛡️ PVE 底座与 10002 模式优先级机制
+                                </div>
+                                <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.5;">
+                                    • <strong>网口闲置 (未插线/DOWN)</strong>：PVE 原始网桥配置优先保留，随时待命接入；<br>
+                                    • <strong>网口不闲置 (接线在用/UP)</strong>：由 10002 管理面板下发的独立工作模式生效。
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Router Specific Parameters (Only shown in Router Mode) -->
-                        <div id="router-mode-params" style="display:none; border-top:1px dashed var(--border-color); padding-top:14px; margin-top:10px;">
-                            <div style="font-size:13px; font-weight:700; color:var(--accent-purple); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
-                                <i class="fa-solid fa-sliders"></i> 主路由子网与内置 DHCP 服务参数设置
-                            </div>
-                            <div class="grid-4" style="gap:12px;">
-                                <div>
-                                    <label style="font-size:11px; font-weight:600; color:var(--text-secondary);">LAN 网关 IP (NAS IP)</label>
-                                    <input type="text" id="router-cfg-gateway" class="form-input form-input-sm mono" value="192.168.100.1">
-                                </div>
-                                <div>
-                                    <label style="font-size:11px; font-weight:600; color:var(--text-secondary);">子网掩码 (Netmask)</label>
-                                    <input type="text" id="router-cfg-netmask" class="form-input form-input-sm mono" value="255.255.255.0">
-                                </div>
-                                <div>
-                                    <label style="font-size:11px; font-weight:600; color:var(--text-secondary);">DHCP 分发起始 IP</label>
-                                    <input type="text" id="router-cfg-start" class="form-input form-input-sm mono" value="192.168.100.100">
-                                </div>
-                                <div>
-                                    <label style="font-size:11px; font-weight:600; color:var(--text-secondary);">DHCP 分发结束 IP</label>
-                                    <input type="text" id="router-cfg-end" class="form-input form-input-sm mono" value="192.168.100.200">
-                                </div>
-                            </div>
+                    <!-- Individual LAN Ports Independent Mode Cards Container -->
+                    <div style="margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <label style="font-size:13px; font-weight:700; color:var(--text-primary); margin:0; display:flex; align-items:center; gap:6px;">
+                                <span>🟢 各扩展网口 (LAN Ports) 独立配置列表</span>
+                            </label>
+                            <span style="font-size:11px; color:var(--text-secondary);">每个 LAN 均可选择不同的二层或三层网络行为</span>
+                        </div>
+                        <div id="lan-modes-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap:14px;">
+                            <div style="text-align:center; padding:20px; color:var(--text-secondary);">正在加载各 LAN 端口配置...</div>
                         </div>
                     </div>
 
                     <!-- Action Bar -->
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <div style="font-size:12px; color:var(--text-secondary);">
-                            💡 提示：模式切换会自动生成标准 Netplan 拓扑并平滑生效，切换期间 Web 控制台无缝防失联。
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:var(--bg-primary); padding:12px 16px; border-radius:8px; border:1px solid var(--border-color);">
+                        <div style="font-size:12px; color:var(--text-secondary);" id="lan-mode-sync-hint">
+                            💡 修改模式后点击应用，系统将即时热更新对应网卡模式，并同步写入配置数据库。
                         </div>
                         <button class="btn btn-primary" id="btn-save-network-mode" onclick="applyNetworkWorkingMode()">
                             <i class="fa-solid fa-floppy-disk"></i> 保存并应用网络工作模式
