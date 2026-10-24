@@ -1630,6 +1630,11 @@ function applyLanPortModeSync(iface, config, isIdle) {
             if (fs.existsSync(isolatedPath)) {
                 fs.writeFileSync(isolatedPath, isolated ? '1' : '0');
             }
+            // Always enable hairpin_mode (reflective relay) on switch ports to ensure devices on the same port/switch can always communicate freely
+            const hairpinPath = path.join(brPortPath, 'hairpin_mode');
+            if (fs.existsSync(hairpinPath)) {
+                fs.writeFileSync(hairpinPath, mode === 'switch' ? '1' : '0');
+            }
         }
     } catch(e) {}
 }
