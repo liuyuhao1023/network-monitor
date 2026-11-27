@@ -25,3 +25,12 @@ websites.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Audit & runtime logs
+*.jsonl
+*.log
+
+# Backup and temp files
+*.bak*
+*.before-redesign
+*.ppm

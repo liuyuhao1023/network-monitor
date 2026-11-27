@@ -8,6 +8,43 @@ const fs = require('fs');
 const net = require('net');
 
 const rawExecPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
+
+function setSambaPassword(username, password) {
+    return new Promise((resolve, reject) => {
+        const child = execFile('/usr/bin/smbpasswd', ['-s', '-a', username], {
+            env: { ...process.env, PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' }
+        }, (error, stdout, stderr) => {
+            if (error) return reject(new Error((stderr || error.message).trim()));
+            resolve({ stdout, stderr });
+        });
+        child.stdin.end(`${password}\n${password}\n`);
+    });
+}
+
+function replaceSmbShare(conf, shareName, block) {
+    const lines = conf.split(/\r?\n/);
+    const output = [];
+    let skipping = false;
+    let replaced = false;
+    for (const line of lines) {
+        const match = line.match(/^\s*\[([^\]]+)\]\s*$/);
+        if (match) {
+            if (skipping) {
+                output.push(block.trimEnd());
+                replaced = true;
+            }
+            skipping = match[1] === shareName;
+        }
+        if (!skipping) output.push(line);
+    }
+    if (skipping) {
+        output.push(block.trimEnd());
+        replaced = true;
+    }
+    if (!replaced) output.push('', block.trimEnd());
+    return output.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
 const hasSudo = (() => {
     try {
         const { execSync } = require('child_process');
@@ -590,6 +627,7 @@ let _rmLastNet = {}; let _rmLastTime = Date.now();
 let _rmLastCpuStats = {};
 app.get('/api/system/resource-monitor', async (req, res) => {
     try {
+        const hw = await require('./resource-hardware')();
         const now = Date.now();
         const dt = (now - _rmLastTime) / 1000 || 1;
         _rmLastTime = now;
@@ -598,11 +636,11 @@ app.get('/api/system/resource-monitor', async (req, res) => {
             execPromise("cat /proc/net/dev"),
             execPromise("cat /proc/stat"),
             execPromise("cat /proc/meminfo"),
-            execPromise("ps -eo pid,user,%cpu,%mem,rss,comm --sort=-%cpu | head -25"),
+            execPromise("ps -eo pid,user,%cpu,%mem,rss,comm --sort=-%cpu | head -101"),
             execPromise("cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null || grep 'cpu MHz' /proc/cpuinfo"),
             execPromise("for f in /sys/class/hwmon/hwmon*/temp*_label; do input=\"${f%_label}_input\"; echo \"$(cat $f 2>/dev/null): $(cat $input 2>/dev/null)\"; done 2>/dev/null || true"),
             execPromise("cat /sys/class/drm/card0/gt_cur_freq_mhz 2>/dev/null; cat /sys/class/drm/card0/gt_act_freq_mhz 2>/dev/null; cat /sys/class/drm/card0/gt_max_freq_mhz 2>/dev/null"),
-            execPromise("ps -eL | wc -l; ps -e | wc -l"),
+            execPromise("ps -eL --no-headers | wc -l; ps -e --no-headers | wc -l"),
             execPromise("cat /proc/uptime"),
             execPromise("lsblk -J -o NAME,FSTYPE,SIZE,MOUNTPOINT,MODEL,TRAN,ROTA,TYPE"),
             execPromise("df -h -T -x tmpfs -x devtmpfs -x efivarfs -x overlay -x squashfs")
@@ -612,19 +650,18 @@ app.get('/api/system/resource-monitor', async (req, res) => {
 
         // --- Storage (Dynamic Disks & Mount Points) ---
         let storageDisks = [];
+        let blockRoots = [];
+        const containsMount = (d, mount) => d.mountpoint === mount || (d.children || []).some(c => containsMount(c, mount));
+        const containsDevice = (d, device) => '/dev/' + d.name === device || (d.children || []).some(c => containsDevice(c, device));
         try {
-            const parsedLsblk = JSON.parse(v(lsblkRaw));
-            if (parsedLsblk && parsedLsblk.blockdevices) {
-                storageDisks = parsedLsblk.blockdevices.map(d => ({
-                    name: d.name,
-                    model: d.model || 'Generic Storage',
-                    size: d.size,
-                    tran: (d.tran || 'sata').toUpperCase(),
-                    type: d.rota === false ? 'SATA SSD (固态硬盘)' : 'SATA HDD (机械硬盘)',
-                    mountpoint: d.mountpoint || (d.children && d.children[0] ? d.children[0].mountpoint : null),
-                    isSystemDisk: d.name === 'sdb' || (d.children && d.children.some(c => c.mountpoint === '/' || (c.children && c.children.some(cc => cc.mountpoint === '/'))))
-                }));
-            }
+            blockRoots = JSON.parse(v(lsblkRaw)).blockdevices || [];
+            storageDisks = blockRoots.filter(d => d.type === 'disk' && parseFloat(String(d.size || '0')) > 0).map(d => ({
+                name: d.name, model: d.model?.trim() || '未提供', size: d.size,
+                tran: (d.tran || '未提供').toUpperCase(),
+                type: d.rota === false ? 'SSD 固态硬盘' : d.rota === true ? 'HDD 机械硬盘' : '未提供',
+                mountpoint: containsMount(d, '/') ? '/' : d.mountpoint,
+                isSystemDisk: containsMount(d, '/')
+            }));
         } catch(e) {}
 
         const dfLines = v(dfRaw).trim().split('\n').slice(1);
@@ -638,32 +675,14 @@ app.get('/api/system/resource-monitor', async (req, res) => {
             const avail = p[4];
             const usePct = parseInt(p[5]) || 0;
             const mount = p[6];
-            let label = mount;
-            let diskDesc = 'SATA 存储';
-            if (mount === '/') {
-                label = '根分区 / (系统盘: KIOXIA 512GB SATA SSD)';
-                diskDesc = 'KIOXIA-EXCERIA SATA SSD (512GB)';
-            } else if (mount === '/boot') {
-                label = '引导分区 /boot (KIOXIA 512GB SATA SSD)';
-                diskDesc = 'KIOXIA SATA SSD';
-            } else if (mount === '/boot/efi') {
-                label = 'EFI 系统分区 /boot/efi';
-                diskDesc = 'UEFI 引导';
-            } else if (mount === '/mnt/md127') {
-                label = '存储池 /mnt/md127 (2x WDC 1TB SSD - RAID1)';
-                diskDesc = 'WDC 1TB SSD x2 (RAID1 镜像)';
-            } else if (mount === '/mnt/md125') {
-                label = '存储池 /mnt/md125 (2x 500GB HDD - RAID0 条带)';
-                diskDesc = '500GB HDD x2 (RAID0 高速)';
-            } else if (mount === '/mnt/md126') {
-                label = '存储池 /mnt/md126 (2x Apple 1TB HDD - RAID1)';
-                diskDesc = 'Apple 1TB HDD x2 (RAID1 镜像)';
-            }
+            const label = mount === '/' ? '根分区 /' : mount;
+            const devices = blockRoots.filter(d => containsDevice(d, fs));
+            const diskDesc = devices.map(d => d.model?.trim() || d.name).join(' + ') || fs;
             return { fs, type, size, used, avail, usePct, mount, label, diskDesc };
         }).filter(Boolean);
 
         // Calculate root partition usage
-        const rootPart = partitions.find(p => p.mount === '/') || { usePct: 8, used: '32G', size: '437G', avail: '387G' };
+        const rootPart = partitions.find(p => p.mount === '/') || { usePct: null, used: '未提供', size: '未提供', avail: '未提供' };
 
         // --- Network per-interface ---
         const netLines = v(netRaw).split('\n').slice(2);
@@ -691,11 +710,11 @@ app.get('/api/system/resource-monitor', async (req, res) => {
         for (const line of cpuLines) {
             const p = line.split(/\s+/);
             const name = p[0];
-            const vals = p.slice(1).map(Number);
+            const vals = p.slice(1, 9).map(Number);
             const total = vals.reduce((a,b)=>a+b, 0);
             const idle = vals[3] + (vals[4]||0);
 
-            const prev = _rmLastCpuStats[name] || { total: total - 100, idle: idle - 80 };
+            const prev = _rmLastCpuStats[name] || { total, idle };
             const dTotal = total - prev.total;
             const dIdle = idle - prev.idle;
             _rmLastCpuStats[name] = { total, idle };
@@ -707,50 +726,30 @@ app.get('/api/system/resource-monitor', async (req, res) => {
         // --- CPU Frequencies ---
         const freqLines = v(freqsRaw).trim().split('\n').filter(Boolean);
         const cpuFreqs = freqLines.map((l, i) => {
-            const khz = parseInt(l.replace(/[^0-9]/g, '')) || 0;
-            const ghz = khz > 10000 ? (khz / 1000000).toFixed(2) : (khz / 1000).toFixed(2);
-            return { core: `CPU ${i}`, ghz: `${ghz} GHz`, mhz: khz > 10000 ? Math.round(khz/1000) : khz };
+            const mhz = l.includes(':') ? parseFloat(l.split(':')[1]) : Number(l) / 1000;
+            return { core: `CPU ${i}`, ghz: Number.isFinite(mhz) ? `${(mhz / 1000).toFixed(2)} GHz` : '未提供', mhz };
+
         });
-        const avgFreqGhz = cpuFreqs.length > 0 ? (cpuFreqs.reduce((a,c)=>a+parseFloat(c.ghz), 0) / cpuFreqs.length).toFixed(2) + ' GHz' : '1.80 GHz';
+        const avgFreqGhz = cpuFreqs.length > 0 ? (cpuFreqs.reduce((a,c)=>a+parseFloat(c.ghz), 0) / cpuFreqs.length).toFixed(2) + ' GHz' : '未提供';
 
         // --- Sensors & Temperatures (Smooth Physical EMA Filter) ---
-        const tempInfo = getSmoothedCpuTemperature();
-        const coreTemps = tempInfo.sensorItems;
-        const pkgTemp = tempInfo.cpuTempC;
+        const coreTemps = v(tempsRaw).split('\n').map(line => {
+            const m = line.match(/^((?:Package|Core|Tdie|Tctl)[^:]*):\s*(\d+)/i);
+            return m ? { label: m[1], temp: Number(m[2]) / 1000, tempFmt: `${(Number(m[2])/1000).toFixed(1)} °C` } : null;
+        }).filter(Boolean);
+        const pkgTemp = coreTemps.find(t => /package|tdie|tctl/i.test(t.label))?.temp ?? null;
 
         // --- Counts & Uptime ---
         const cntLines = v(countsRaw).trim().split('\n');
-        const threadsCount = parseInt(cntLines[0]) || 735;
-        const procsCount = parseInt(cntLines[1]) || 271;
-        const upSec = parseFloat(v(uptimeRaw).split(' ')[0]) || 86400;
+        const threadsCount = parseInt(cntLines[0]) || 0;
+        const procsCount = parseInt(cntLines[1]) || 0;
+        const upSec = parseFloat(v(uptimeRaw).split(' ')[0]) || 0;
         const upD = Math.floor(upSec / 86400);
         const upH = Math.floor((upSec % 86400) / 3600);
         const upM = Math.floor((upSec % 3600) / 60);
         const uptimeFmt = upD > 0 ? `${upD} 天 ${upH} 小时 ${upM} 分钟` : `${upH} 小时 ${upM} 分钟`;
 
-        // --- GPU Info (Intel Alder Lake-N integrated graphics) ---
-        const gpuLines = v(gpuRaw).trim().split('\n');
-        const gpuCurFreq = parseInt(gpuLines[0]) || 300;
-        const gpuActFreq = parseInt(gpuLines[1]) || 0;
-        const gpuMaxFreq = parseInt(gpuLines[2]) || 1000;
-        const gpuUsagePct = gpuMaxFreq > 0 ? Math.min(100, Math.round((gpuActFreq / gpuMaxFreq) * 100)) : 0;
-
-        const gpuInfo = {
-            model: 'Intel(R) Alder Lake-N [Intel Graphics]',
-            vendor: 'Intel Corporation',
-            driver: 'i915 (Kernel Driver)',
-            pciSlot: '0000:00:02.0',
-            vramFmt: '动态共享 (UMA)',
-            curFreqFmt: `${gpuCurFreq} MHz`,
-            actFreqFmt: `${gpuActFreq} MHz`,
-            maxFreqFmt: `${gpuMaxFreq} MHz`,
-            memFreqFmt: '系统内存同步 (LPDDR5/DDR5)',
-            powerFmt: 'SoC 动态调节 (TDP 6W)',
-            tempFmt: `${pkgTemp} °C`,
-            usagePct: gpuUsagePct,
-            displayOutputs: 'DP-1, HDMI-A-1, HDMI-A-2',
-            status: '活动 (Active)'
-        };
+        const gpuInfo = hw.gpu;
 
         // --- Memory ---
         const memMap = {};
@@ -773,15 +772,10 @@ app.get('/api/system/resource-monitor', async (req, res) => {
         }).filter(Boolean);
 
         // --- Applications list (filtered key user services) ---
-        const keyApps = [
-            { name: 'Node.js Web 控制台服务', pid: '302090', status: '运行中', cpu: '0.4%', mem: '11 MB', icon: '⚡' },
-            { name: 'Docker 容器引擎守护进程', pid: '1240', status: '运行中', cpu: '0.1%', mem: '78 MB', icon: '🐳' },
-            { name: 'Containerd 容器运行时', pid: '1088', status: '运行中', cpu: '0.1%', mem: '42 MB', icon: '📦' },
-            { name: 'OpenSSH 安全 Shell 守护进程', pid: '1312', status: '监听中', cpu: '0.0%', mem: '6.5 MB', icon: '🔒' },
-            { name: 'Systemd Journal 日志服务', pid: '512', status: '运行中', cpu: '0.1%', mem: '18 MB', icon: '📜' },
-            { name: 'Systemd Networkd 网络管理', pid: '620', status: '运行中', cpu: '0.0%', mem: '7.2 MB', icon: '🌐' },
-            { name: 'Systemd Resolved DNS解析', pid: '580', status: '运行中', cpu: '0.0%', mem: '12 MB', icon: '🔍' },
-        ];
+        const keyApps = procLines.map(line => {
+            const p = line.trim().split(/\s+/);
+            return { name: p[5], pid: p[0], status: '运行中', cpu: `${p[2]}%`, mem: `${(Number(p[4])/1024).toFixed(1)} MiB`, icon: '⚙️' };
+        }).filter(p => /^(node|sshd|dockerd|containerd|NetworkManager|systemd-.*)$/.test(p.name));
 
         res.json({ success: true, data: {
             timestamp: now,
@@ -790,24 +784,15 @@ app.get('/api/system/resource-monitor', async (req, res) => {
                 cores,
                 freqs: cpuFreqs,
                 avgFreq: avgFreqGhz,
-                model: 'Intel(R) N150 (Alder Lake-N)',
-                vendor: 'Intel',
-                coresCount: 4,
-                threadsCount: threadsCount,
-                procsCount: procsCount,
-                arch: 'x86_64 (64位)',
-                l1Cache: '384 KiB (L1d: 128 KiB, L1i: 256 KiB)',
-                l2Cache: '2 MiB',
-                l3Cache: '6 MiB',
-                baseFreq: '0.70 GHz',
-                maxFreq: '3.60 GHz',
-                virtualization: 'VT-x (已启用)',
+                ...hw.cpu,
+                threadsCount,
+                procsCount,
                 uptimeFormatted: uptimeFmt
             },
             gpu: gpuInfo,
             sensors: {
                 pkgTemp,
-                pkgTempFmt: `${pkgTemp} °C`,
+                pkgTempFmt: pkgTemp === null ? '未提供' : `${pkgTemp} °C`,
                 coreTemps
             },
             memory: {
@@ -820,8 +805,8 @@ app.get('/api/system/resource-monitor', async (req, res) => {
                 disks: storageDisks,
                 partitions: partitions,
                 rootPart: rootPart,
-                systemDiskModel: 'KIOXIA-EXCERIA SATA SSD (512GB)',
-                systemDiskType: 'SATA SSD (固态硬盘)'
+                systemDiskModel: storageDisks.filter(d => d.isSystemDisk).map(d => d.model).join(' + ') || '未提供',
+                systemDiskType: storageDisks.find(d => d.isSystemDisk)?.type || '未提供'
             },
             processes: topProcs,
             applications: keyApps
@@ -1515,56 +1500,48 @@ function getPhysicalNetworkInterfaces() {
                 }
             }
         }
+        // Also ensure known physical NICs (like enp5s0f0, enp12s0f0) are retained even if assigned to a container
+        const lxcDir = '/var/lib/lxc';
+        if (fs.existsSync(lxcDir)) {
+            for (const ctName of fs.readdirSync(lxcDir)) {
+                const cfgPath = path.join(lxcDir, ctName, 'config');
+                if (!fs.existsSync(cfgPath)) continue;
+                try {
+                    const txt = fs.readFileSync(cfgPath, 'utf8');
+                    for (const line of txt.split('\n')) {
+                        const m = line.match(/lxc\.net\.\d+\.link\s*=\s*([a-zA-Z0-9]+)/);
+                        if (m && m[1].startsWith('enp') && !nics[m[1]]) {
+                            nics[m[1]] = '';
+                        }
+                    }
+                } catch(_) {}
+            }
+        }
     } catch (e) {}
     return nics;
 }
 
-function getPveNetworkInterfacesInfo() {
-    const pveInfo = {
-        isPve: false,
-        bridgePorts: [],
-        vmAssignedPorts: [],
-        vmbr0Ports: []
-    };
-    try {
-        if (fs.existsSync('/etc/pve')) {
-            pveInfo.isPve = true;
-            if (fs.existsSync('/etc/network/interfaces')) {
-                const content = fs.readFileSync('/etc/network/interfaces', 'utf8');
-                const bridgeMatches = content.match(/bridge-ports\s+([^\n]+)/);
-                if (bridgeMatches && bridgeMatches[1]) {
-                    pveInfo.vmbr0Ports = bridgeMatches[1].trim().split(/\s+/).filter(Boolean);
-                    pveInfo.bridgePorts = [...pveInfo.vmbr0Ports];
-                }
-            }
-
-            const qemuDir = '/etc/pve/qemu-server';
-            if (fs.existsSync(qemuDir)) {
-                const files = fs.readdirSync(qemuDir);
-                for (const f of files) {
-                    if (f.endsWith('.conf')) {
-                        const vmCfg = fs.readFileSync(path.join(qemuDir, f), 'utf8');
-                        const pciMatches = vmCfg.match(/hostpci\d+:\s*([^\n,]+)/g);
-                        if (pciMatches) {
-                            pciMatches.forEach(m => pveInfo.vmAssignedPorts.push(m));
-                        }
-                    }
-                }
-            }
-        }
-    } catch(e) {}
-    return pveInfo;
+function getHostNetworkInterfacesInfo() {
+    const bridgeByPort = {};
+    for (const name of Object.keys(getPhysicalNetworkInterfaces())) {
+        const master = path.join('/sys/class/net', name, 'master');
+        try {
+            const target = fs.realpathSync(master);
+            if (fs.existsSync(path.join(target, 'bridge'))) bridgeByPort[name] = path.basename(target);
+        } catch (_) {}
+    }
+    return { bridgeByPort };
 }
 
 function loadNetworkModeConfig() {
     const phys = getPhysicalNetworkInterfaces();
-    let defaultWan = phys['lan1'] ? 'lan1' : (phys['enp4s0'] ? 'enp4s0' : (Object.keys(phys)[0] || 'eth0'));
+    let defaultWan = '';
     const defaultLans = Object.keys(phys).filter(p => p !== defaultWan);
 
     const defaultLanModes = {};
     for (const lan of defaultLans) {
         defaultLanModes[lan] = {
-            mode: 'switch',
+            mode: 'standalone',
             alias: '',
             ip: '',
             netmask: '255.255.255.0',
@@ -1576,7 +1553,7 @@ function loadNetworkModeConfig() {
     }
 
     const defaultCfg = {
-        mode: 'custom',
+        mode: 'standalone',
         wan_interface: defaultWan,
         lan_interfaces: defaultLans,
         lan_modes: defaultLanModes,
@@ -1599,7 +1576,7 @@ function loadNetworkModeConfig() {
                 if (!merged.lan_modes) merged.lan_modes = {};
                 for (const lan of defaultLans) {
                     if (!merged.lan_modes[lan]) {
-                        merged.lan_modes[lan] = defaultLanModes[lan] || { mode: 'switch', isolated: false, alias: '' };
+                        merged.lan_modes[lan] = defaultLanModes[lan] || { mode: 'standalone', isolated: false, alias: '' };
                     }
                 }
                 return merged;
@@ -1639,11 +1616,199 @@ function applyLanPortModeSync(iface, config, isIdle) {
     } catch(e) {}
 }
 
-app.get('/api/network/mode', (req, res) => {
+const lanRateCache = new Map();
+let bmcNetworkCache=null;
+let nicThermalCache=null,nicThermalPending=null;
+async function getNicTemperatures() {
+    if(nicThermalCache && Date.now()-nicThermalCache.timestamp<15000)return nicThermalCache;
+    if(nicThermalPending)return nicThermalPending;
+    nicThermalPending=(async()=>{
+        const data={timestamp:Date.now(),pci:{},boardX540:null,error:null};
+        try {
+            for(const h of fs.readdirSync('/sys/class/hwmon')) {
+                const dir=path.join('/sys/class/hwmon',h),real=fs.realpathSync(dir);
+                const pci=real.match(/[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]/gi)?.at(-1);
+                if(!pci)continue;
+                for(const file of fs.readdirSync(dir).filter(f=>/^temp\d+_input$/.test(f))) {
+                    const raw=fs.readFileSync(path.join(dir,file),'utf8').trim();
+                    const value=raw!==''?Number(raw)/1000:NaN;
+                    if(Number.isFinite(value)&&value>=-40&&value<=150)data.pci[pci]=Math.max(data.pci[pci]??-40,value);
+                }
+            }
+            const {stdout}=await util.promisify(execFile)('/usr/bin/ipmitool',['-I','open','sdr','type','Temperature'],{timeout:8000,env:{...process.env,LC_ALL:'C'}});
+            const row=stdout.split('\n').find(l=>/^X540 Temp\s*\|/.test(l));
+            const match=row?.match(/\|\s*(-?\d+(?:\.\d+)?) degrees C/);
+            if(match)data.boardX540=Number(match[1]);
+        }catch(e){data.error='部分温度采集失败';}
+        nicThermalCache=data;return data;
+    })().finally(()=>nicThermalPending=null);
+    return nicThermalPending;
+}
+async function getBmcNetworkPort() {
+    if(bmcNetworkCache && Date.now()-bmcNetworkCache.timestamp<60000)return bmcNetworkCache;
+    try {
+        const {stdout}=await util.promisify(execFile)('/usr/bin/ipmitool',['-I','open','lan','print','1'],{timeout:5000,env:{...process.env,LC_ALL:'C'}});
+        const fields=Object.fromEntries(stdout.split('\n').filter(l=>l.includes(':')).map(l=>{const i=l.indexOf(':');return [l.slice(0,i).trim(),l.slice(i+1).trim()];}));
+        bmcNetworkCache={timestamp:Date.now(),available:true,ip:fields['IP Address'],mac:fields['MAC Address'],source:fields['IP Address Source']};
+    }catch(_){return {available:false};}
+    return bmcNetworkCache;
+}
+async function getLanRates(name, connected) {
+    let cached=lanRateCache.get(name);
+    if(!cached || Date.now()-cached.time>60000) {
+        let maximum=null,model='以太网卡';
+        try {
+            const pci=path.basename(fs.realpathSync(`/sys/class/net/${name}/device`));
+            const {stdout}=await util.promisify(execFile)('lspci',['-s',pci],{timeout:2000});
+            model=stdout.trim().replace(/^.*?(?:Ethernet|Network) controller:\s*/,'').replace(/\s*\(rev .*\)$/,'');
+        }catch(_){}
+        try {
+            const {stdout}=await util.promisify(execFile)('ethtool',[name],{timeout:2000,env:{...process.env,LC_ALL:'C'}});
+            const modes=stdout.match(/Supported link modes:\s*([\s\S]*?)(?=\n\s*[A-Za-z][^\n]*:|$)/);
+            const rates=modes?[...modes[1].matchAll(/(\d+)base/gi)].map(m=>Number(m[1])):[];
+            if(rates.length)maximum=Math.max(...rates);
+        }catch(_){}
+        cached={time:Date.now(),maximum,model};lanRateCache.set(name,cached);
+    }
+    let current=null;
+    if(connected)try{const n=Number(fs.readFileSync(`/sys/class/net/${name}/speed`,'utf8').trim());if(n>0)current=n;}catch(_){}
+    return {maxSpeedMbps:cached.maximum,negotiatedSpeedMbps:current,model:cached.model};
+}
+function getVmNetworkBindings() {
+    const bindings = {};
+    function parseDomain(xmlStr, vmName, isLive) {
+        const ifaceRegex = /<interface\s+type=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/interface>/g;
+        let match;
+        while ((match = ifaceRegex.exec(xmlStr)) !== null) {
+            const ifType = match[1];
+            const body = match[2];
+            const srcDevMatch = body.match(/<source\s+dev=['"]([^'"]+)['"](?:\s+mode=['"]([^'"]+)['"])?/i);
+            const srcBridgeMatch = body.match(/<source\s+bridge=['"]([^'"]+)['"]/i);
+            const targetDevMatch = body.match(/<target\s+dev=['"]([^'"]+)['"]/i);
+            const macMatch = body.match(/<mac\s+address=['"]([^'"]+)['"]/i);
+            const modelMatch = body.match(/<model\s+type=['"]([^'"]+)['"]/i);
+            const dev = srcDevMatch ? srcDevMatch[1] : (srcBridgeMatch ? srcBridgeMatch[1] : null);
+            const mode = srcDevMatch?.[2] || (ifType === 'bridge' ? 'bridge' : ifType);
+            const mac = macMatch ? macMatch[1] : null;
+            const targetDev = targetDevMatch ? targetDevMatch[1] : null;
+            const model = modelMatch ? modelMatch[1] : 'virtio';
+            if (dev) {
+                const isPt = (mode === 'passthrough' || ifType === 'hostdev');
+                const isBr = (mode === 'bridge' || ifType === 'bridge');
+                if (!bindings[dev]) {
+                    bindings[dev] = {
+                        vmName,
+                        dev,
+                        mode,
+                        type: ifType,
+                        isPassthrough: isPt,
+                        isBridge: isBr,
+                        status: isLive ? 'active' : 'configured',
+                        isLive: Boolean(isLive),
+                        mac,
+                        model,
+                        macvtap: targetDev || null
+                    };
+                } else if (isLive) {
+                    bindings[dev].isLive = true;
+                    bindings[dev].mode = mode;
+                    bindings[dev].activeMode = mode;
+                    bindings[dev].isPassthrough = isPt;
+                    bindings[dev].isBridge = isBr;
+                    bindings[dev].status = 'active';
+                    if (targetDev) bindings[dev].macvtap = targetDev;
+                    if (mac) bindings[dev].mac = mac;
+                } else {
+                    bindings[dev].configuredMode = mode;
+                    if (bindings[dev].mode !== mode) {
+                        bindings[dev].pendingRestart = true;
+                        bindings[dev].pendingMode = mode;
+                    }
+                }
+            }
+        }
+    }
+    try {
+        const runDir = '/var/run/libvirt/qemu';
+        if (fs.existsSync(runDir)) {
+            for (const f of fs.readdirSync(runDir).filter(f => f.endsWith('.xml'))) {
+                try { parseDomain(fs.readFileSync(path.join(runDir, f), 'utf8'), f.replace(/\.xml$/, ''), true); } catch(_) {}
+            }
+        }
+    } catch(_) {}
+    try {
+        const etcDir = '/etc/libvirt/qemu';
+        if (fs.existsSync(etcDir)) {
+            for (const f of fs.readdirSync(etcDir).filter(f => f.endsWith('.xml'))) {
+                try { parseDomain(fs.readFileSync(path.join(etcDir, f), 'utf8'), f.replace(/\.xml$/, ''), false); } catch(_) {}
+            }
+        }
+    } catch(_) {}
+
+    // Also scan LXC CT containers
+    try {
+        const lxcDir = '/var/lib/lxc';
+        if (fs.existsSync(lxcDir)) {
+            for (const ctName of fs.readdirSync(lxcDir)) {
+                const cfgPath = path.join(lxcDir, ctName, 'config');
+                if (!fs.existsSync(cfgPath)) continue;
+                try {
+                    const txt = fs.readFileSync(cfgPath, 'utf8');
+                    const netProps = {};
+                    for (const line of txt.split('\n')) {
+                        const trimmed = line.trim();
+                        if (!trimmed || trimmed.startsWith('#')) continue;
+                        if (trimmed.includes('=')) {
+                            const [k, v] = trimmed.split('=').map(x => x.trim());
+                            if (k.startsWith('lxc.net.')) {
+                                const parts = k.split('.');
+                                const idx = parts[2];
+                                const prop = parts.slice(3).join('.');
+                                if (!netProps[idx]) netProps[idx] = {};
+                                netProps[idx][prop] = v;
+                            }
+                        }
+                    }
+
+                    for (const idx of Object.keys(netProps)) {
+                        const net = netProps[idx];
+                        const dev = net.link;
+                        const type = net.type;
+                        const mode = net['macvlan.mode'] || net.mode;
+                        if (dev) {
+                            const isPt = (type === 'phys' || mode === 'passthru' || mode === 'passthrough');
+                            const isBr = (type === 'macvlan' && mode === 'bridge') || type === 'veth';
+                            if (!bindings[dev]) {
+                                bindings[dev] = {
+                                    vmName: ctName,
+                                    isCt: true,
+                                    dev,
+                                    mode: isPt ? 'passthrough' : 'bridge',
+                                    type: isPt ? 'passthrough' : 'bridge',
+                                    isPassthrough: isPt,
+                                    isBridge: isBr,
+                                    status: 'active',
+                                    isLive: true,
+                                    mac: net.hwaddr || null
+                                };
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+    } catch (_) {}
+
+    return bindings;
+}
+
+app.get('/api/network/mode', async (req, res) => {
     try {
         const cfg = loadNetworkModeConfig();
-        const pve = getPveNetworkInterfacesInfo();
+        const hostNetwork = getHostNetworkInterfacesInfo();
+        const thermal=await getNicTemperatures();
         const phys = getPhysicalNetworkInterfaces();
+        const vmBindings = getVmNetworkBindings();
 
         const lanDetails = {};
         for (const [ifaceName, mac] of Object.entries(phys)) {
@@ -1661,41 +1826,66 @@ app.get('/api/network/mode', (req, res) => {
             } catch(e) {}
 
             const isIdle = (carrier === 0 || operstate === 'down');
-            const isPveBridge = pve.vmbr0Ports.includes(ifaceName);
+            const bridgeName = hostNetwork.bridgeByPort[ifaceName] || null;
             const isWan = (ifaceName === cfg.wan_interface);
+            const vmBinding = vmBindings[ifaceName] || null;
 
-            let activePriority = '10002_custom';
-            let priorityDesc = '由 10002 管理面板独立配置工作模式';
-            if (isWan) {
+            let activePriority = 'standalone';
+            let priorityDesc = '独立物理网口';
+            if (vmBinding) {
+                const entityName = vmBinding.isCt ? `CT 容器【${vmBinding.vmName}】` : `虚拟机【${vmBinding.vmName}】`;
+                if (vmBinding.isPassthrough) {
+                    activePriority = vmBinding.isCt ? 'ct_passthrough' : 'vm_passthrough';
+                    priorityDesc = `${entityName}硬件直通独占 · 物理端口单独使用`;
+                } else if (vmBinding.isBridge) {
+                    activePriority = vmBinding.isCt ? 'ct_bridge' : 'vm_bridge';
+                    priorityDesc = `系统与${entityName}共享网口 · 局域网桥接 (同网段)`;
+                }
+            } else if (isWan) {
                 activePriority = 'wan_uplink';
-                priorityDesc = '固定主管理上行口 (WAN)，锁定防失联';
-            } else if (isPveBridge && isIdle) {
-                activePriority = 'pve_standby';
-                priorityDesc = 'PVE 网桥预置端口 (当前闲置待命，已就绪供 10002 自主指派模式)';
-            } else if (isPveBridge && !isIdle) {
-                activePriority = '10002_active';
-                priorityDesc = '物理接口在用 (根据 10002 设定的工作模式运行)';
+                priorityDesc = '已指定为上行口';
+            } else if (bridgeName) {
+                activePriority = 'linux_bridge';
+                priorityDesc = 'Linux 网桥成员：' + bridgeName;
+            } else if (cfg.lan_modes?.[ifaceName]?.mode && cfg.lan_modes[ifaceName].mode !== 'standalone') {
+                activePriority = 'configured';
+                priorityDesc = '已保存网口用途；实际链路状态单独显示';
             }
 
             lanDetails[ifaceName] = {
+                ...await getLanRates(ifaceName,!isIdle),
                 iface: ifaceName,
                 mac,
                 isIdle,
                 carrier,
                 operstate,
                 isWan,
-                isPveBridge,
+                bridgeName,
                 activePriority,
                 priorityDesc,
-                config: cfg.lan_modes?.[ifaceName] || { mode: 'switch', isolated: false, alias: '' }
+                vmBinding,
+                config: cfg.lan_modes?.[ifaceName] || { mode: 'standalone', isolated: false, alias: '' }
             };
+            const detail=lanDetails[ifaceName];
+            try {
+                const pciPath=fs.realpathSync(`/sys/class/net/${ifaceName}/device`);
+                const addresses=pciPath.split('/').filter(p=>/^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$/i.test(p));
+                detail.pciAddress=addresses.at(-1);
+                detail.cardId=addresses.length>1?addresses[0]:detail.pciAddress.replace(/\.[0-7]$/,'');
+                detail.onboard=['d0:50:99:c0:76:34','d0:50:99:c0:76:35'].includes(mac);
+            }catch(_){detail.cardId=ifaceName;}
+            const local=(req.socket.localAddress||'').replace(/^::ffff:/,'');
+            detail.isManagement=(os.networkInterfaces()[ifaceName]||[]).some(a=>a.address===local);
+            const direct=thermal.pci[detail.pciAddress];
+            detail.temperature={celsius:Number.isFinite(direct)?direct:detail.onboard?thermal.boardX540:null,source:Number.isFinite(direct)?'PCI 设备传感器':detail.onboard?'BMC · 板载 X540':'未发现对应温度传感器',timestamp:thermal.timestamp,error:thermal.error};
         }
 
         res.json({
             success: true,
             data: {
                 ...cfg,
-                pveInfo: pve,
+                hostNetwork,
+                bmcPort:await getBmcNetworkPort(),
                 lanDetails
             }
         });
@@ -1711,7 +1901,7 @@ app.post('/api/network/mode', async (req, res) => {
 
         const updatedCfg = {
             mode: mode || currentCfg.mode || 'custom',
-            wan_interface: wan_interface || currentCfg.wan_interface || 'enp4s0',
+            wan_interface: typeof wan_interface === 'string' ? wan_interface : (currentCfg.wan_interface || ''),
             lan_interfaces: Array.isArray(lan_interfaces) ? lan_interfaces : (currentCfg.lan_interfaces || []),
             lan_modes: lan_modes || currentCfg.lan_modes || {},
             router_config: router_config || currentCfg.router_config || {
@@ -1868,6 +2058,7 @@ app.get('/api/network/interfaces', async (req, res) => {
         const wanIface = modeCfg.wan_interface || 'lan1';
         const lanIfaces = modeCfg.lan_interfaces || [];
         const physNics = getPhysicalNetworkInterfaces();
+        const vmBindings = getVmNetworkBindings();
 
         // Query port connected devices (downstream/upstream matched IPs)
         const portConnectedMap = await getPortConnectedDevices();
@@ -1923,30 +2114,40 @@ app.get('/api/network/interfaces', async (req, res) => {
                 }
             }
 
-            // Detect exact physical hardware specs (2.5G vs 1G vs 10G) via sysfs driver
+            // Read hardware capabilities independently of the interface name.
             let driverName = '';
             let hardwareSpec = isPhysical ? '以太网卡' : '虚拟网络接口';
-            let maxSpeed = isPhysical ? '1000Mb/s' : '10000Mb/s';
+            let maxSpeed = '未知';
 
             if (isPhysical) {
                 try {
-                    const drvLink = fs.readlinkSync(`/sys/class/net/${name}/device/driver`);
-                    const parts = drvLink.split('/');
-                    driverName = parts[parts.length - 1] || '';
+                    driverName = path.basename(fs.readlinkSync(`/sys/class/net/${name}/device/driver`));
                 } catch(e) {}
 
-                if (driverName === 'igc' || name.startsWith('lan') || driverName.includes('r8125')) {
-                    hardwareSpec = '2.5G 网卡 (Intel I226-V)';
-                    maxSpeed = '2500Mb/s';
-                } else if (driverName === 'igb' || name.startsWith('enp') || driverName === 'e1000e' || driverName === 'r8169' || driverName === 'tg3') {
-                    hardwareSpec = '千兆网卡 (Intel 82576 / 1Gbps)';
-                    maxSpeed = '1000Mb/s';
-                } else if (driverName === 'ixgbe' || driverName === 'i40e' || driverName.includes('mlx')) {
-                    hardwareSpec = '万兆网卡 (10Gbps SFP+)';
-                    maxSpeed = '10000Mb/s';
-                } else {
-                    hardwareSpec = name.startsWith('lan') ? '2.5G 网卡' : '千兆网卡 (1Gbps)';
-                    maxSpeed = name.startsWith('lan') ? '2500Mb/s' : '1000Mb/s';
+                let model = '';
+                try {
+                    const pciAddress = path.basename(fs.realpathSync(`/sys/class/net/${name}/device`));
+                    if (/^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$/i.test(pciAddress)) {
+                        const { stdout } = await util.promisify(execFile)('lspci', ['-s', pciAddress], { timeout: 2000 });
+                        model = stdout.trim().replace(/^.*?(?:Ethernet|Network) controller:\s*/, '').replace(/\s*\(rev .*\)$/, '');
+                    }
+                } catch(e) {}
+
+                try {
+                    const { stdout } = await util.promisify(execFile)('ethtool', [name], { timeout: 2000 });
+                    const modes = stdout.match(/Supported link modes:\s*([\s\S]*?)(?=\n\s*[A-Za-z][^\n]*:|$)/);
+                    const rates = modes ? [...modes[1].matchAll(/(\d+)base/gi)].map(m => Number(m[1])) : [];
+                    if (rates.length) {
+                        const maximum = Math.max(...rates);
+                        maxSpeed = `${maximum}Mb/s`;
+                        const rateLabel = maximum >= 1000 ? `${maximum / 1000}Gbps` : `${maximum}Mbps`;
+                        const port = /Port:\s*Twisted Pair/.test(stdout) ? 'RJ45 电口' : '';
+                        hardwareSpec = [model || driverName || '以太网卡', rateLabel, port].filter(Boolean).join(' · ');
+                    } else {
+                        hardwareSpec = model || driverName || hardwareSpec;
+                    }
+                } catch(e) {
+                    hardwareSpec = model || driverName || hardwareSpec;
                 }
             }
 
@@ -1963,7 +2164,7 @@ app.get('/api/network/interfaces', async (req, res) => {
             } catch(e) {}
 
             if (speed === '未知') {
-                speed = isConnected ? maxSpeed : '未连通 (待插线)';
+                speed = isConnected ? '未知' : '未连通 (待插线)';
             }
 
             let rxBytes = 0, txBytes = 0;
@@ -1975,8 +2176,18 @@ app.get('/api/network/interfaces', async (req, res) => {
             let role = 'STANDALONE';
             let roleDesc = '独立网卡端口';
 
+            const vmBinding = vmBindings[name] || null;
             const lanConf = modeCfg.lan_modes?.[name];
-            if (name === wanIface) {
+            if (vmBinding) {
+                const entity = vmBinding.isCt ? `CT 容器【${vmBinding.vmName}】` : `虚拟机【${vmBinding.vmName}】`;
+                if (vmBinding.isPassthrough) {
+                    role = vmBinding.isCt ? 'CT_PASSTHROUGH' : 'VM_PASSTHROUGH';
+                    roleDesc = `${entity}硬件直通独占 · 流量硬件旁路隔离`;
+                } else if (vmBinding.isBridge) {
+                    role = vmBinding.isCt ? 'CT_BRIDGE' : 'VM_BRIDGE';
+                    roleDesc = `${entity}局域网同网段桥接`;
+                }
+            } else if (name === wanIface) {
                 role = 'WAN';
                 roleDesc = '固定输入网口 (WAN / 主管理上行连接口)';
             } else if (lanConf || lanIfaces.includes(name)) {
@@ -1986,7 +2197,7 @@ app.get('/api/network/interfaces', async (req, res) => {
                     roleDesc = '隔离交换端口 (LAN / PVLAN 客户机间相互隔离)';
                 } else if (pMode === 'standalone') {
                     role = 'STANDALONE';
-                    roleDesc = '独立网卡端口 (直通 / 独立专用)';
+                    roleDesc = '独立物理网口 (独立使用 / 未桥接)';
                 } else if (pMode === 'router') {
                     role = 'LAN_ROUTER';
                     roleDesc = '路由子网端口 (LAN / 自定义私网)';
@@ -2003,6 +2214,18 @@ app.get('/api/network/interfaces', async (req, res) => {
             } else if (name === 'docker0') {
                 role = 'DOCKER';
                 roleDesc = 'Docker 容器虚拟网桥';
+            }
+
+            if (isPhysical) {
+                const bridgeMember = fs.existsSync(`/sys/class/net/${name}/brport`);
+                if (!bridgeMember && role === 'LAN_SWITCH') {
+                    role = 'STANDALONE';
+                    roleDesc = '独立物理网口';
+                } else if (bridgeMember && role === 'STANDALONE') {
+                    role = 'LAN_SWITCH';
+                    roleDesc = '实际网桥成员端口';
+                }
+                if (role === 'STANDALONE' && routes.some(r => r.dst === 'default' && r.dev === name)) roleDesc = '独立物理网口 · 默认路由 / 管理连接';
             }
 
             // Downstream/Connected Devices matched to this port
@@ -2024,7 +2247,7 @@ app.get('/api/network/interfaces', async (req, res) => {
                 ipv4: ipv4List,
                 ipv6: ipv6List,
                 ipAddress: ipv4List[0] || (name === 'lan1' && state === 'UP' ? '192.168.1.9' : '未分配'),
-                gateway: defaultGw,
+                gateway: routes.find(r => r.dst === 'default' && r.dev === name)?.gateway || '',
                 netmask,
                 rx_bytes: rxBytes,
                 tx_bytes: txBytes,
@@ -2034,7 +2257,8 @@ app.get('/api/network/interfaces', async (req, res) => {
                 max_speed: maxSpeed,
                 driver: driverName,
                 connected_devices: connectedDevs,
-                matched_ips: matchedIps
+                matched_ips: matchedIps,
+                vmBinding
             });
         }
 
@@ -3815,6 +4039,7 @@ setInterval(pollDiskSpindownDaemon, 10000);
 
 async function applyDiskSpindownSettings(cfg) {
     const config = cfg || readSpindownConfig();
+    if (config.enabled === false) return;
     const globalTimeoutCode = minutesToHdparmTimeoutCode(config.globalTimeout);
     const globalApm = parseInt(config.globalApm) || 127;
 
@@ -3856,7 +4081,11 @@ app.get('/api/system/disks', async (req, res) => {
     try {
         const { stdout } = await execPromise('lsblk --json -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,ROTA,SERIAL');
         const data = JSON.parse(stdout);
-        const blockdevices = data.blockdevices || [];
+        // lsblk also exposes IPMI virtual floppy/USB devices as zero-byte
+        // "disks". They are control-plane devices, not physical storage.
+        const blockdevices = (data.blockdevices || []).filter(d =>
+            d.type === 'disk' && parseFloat(String(d.size || '0')) > 0
+        );
         const hwmonTemps = getDiskTemperaturesFromSysfs();
         const powerStates = await getDiskPowerStates();
         
@@ -3938,11 +4167,10 @@ app.get('/api/system/disks', async (req, res) => {
                         }
                     }
 
-                    let healthPct = 100;
-                    if (isSsd) {
-                        healthPct = 100;
-                    } else {
-                        healthPct = Math.max(0, 100 - badSectors * 2 - Math.floor(powerHours / 2500));
+                    const smartKnown = /SMART overall-health|SMART Health Status|SMART support is:|Temperature_Celsius|Current Drive Temperature|Elements in grown defect list/i.test(smartOut);
+                    let healthPct = null;
+                    if (smartKnown) {
+                        healthPct = isSsd ? 100 : Math.max(0, 100 - badSectors * 2 - Math.floor(powerHours / 2500));
                     }
 
                     disk.temperature = diskTemp;
@@ -3952,7 +4180,7 @@ app.get('/api/system/disks', async (req, res) => {
                         powerHours,
                         healthPct,
                         temperature: diskTemp,
-                        status: badSectors > 0 ? 'WARNING' : 'PASSED'
+                        status: !smartKnown ? 'UNKNOWN' : badSectors > 0 ? 'WARNING' : 'PASSED'
                     };
                 } catch(e) {
                     disk.temperature = diskTemp;
@@ -4558,13 +4786,14 @@ app.get('/api/sharing/status', async (req, res) => {
                 line = line.trim();
                 if (line.startsWith('[') && line.endsWith(']') && line !== '[global]' && line !== '[printers]' && line !== '[print$]') {
                     if (currentShare) smbShares.push(currentShare);
-                    currentShare = { name: line.substring(1, line.length - 1), path: '', guest_ok: 'no', read_only: 'no', comment: '' };
+                    currentShare = { name: line.substring(1, line.length - 1), path: '', guest_ok: 'no', read_only: 'no', comment: '', username: '' };
                 } else if (currentShare && line.includes('=')) {
                     const [k, v] = line.split('=').map(s => s.trim());
                     if (k === 'path') currentShare.path = v;
                     if (k === 'guest ok') currentShare.guest_ok = v;
                     if (k === 'read only') currentShare.read_only = v;
                     if (k === 'comment') currentShare.comment = v;
+                    if (k === 'valid users') currentShare.username = v.split(/[ ,]+/).find(Boolean)?.replace(/^@/, '') || '';
                 }
             });
             if (currentShare) smbShares.push(currentShare);
@@ -4649,8 +4878,12 @@ app.post('/api/sharing/:service/toggle', async (req, res) => {
 
 app.post('/api/sharing/smb/share', async (req, res) => {
     try {
-        const { name, path, guest_ok, read_only, comment } = req.body;
-        if (!name || !path) return res.status(400).json({ success: false, error: 'Name and path required' });
+        const { name, path: sharePath, read_only, comment, username, password } = req.body;
+        if (!name || !sharePath || !username) return res.status(400).json({ success: false, error: '共享名称、路径和认证用户名不能为空' });
+        if (!/^[\p{L}\p{N}][\p{L}\p{N}._ -]{0,79}$/u.test(name)) return res.status(400).json({ success: false, error: '共享名称包含不支持的字符' });
+        if (!path.isAbsolute(sharePath) || !fs.existsSync(sharePath) || !fs.statSync(sharePath).isDirectory()) return res.status(400).json({ success: false, error: '共享路径必须是已存在的绝对目录' });
+        if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(username) || username === 'root') return res.status(400).json({ success: false, error: '用户名只能包含小写字母、数字、下划线或短横线，且不能使用 root' });
+        if (password && (password.length < 8 || password.length > 128)) return res.status(400).json({ success: false, error: '密码长度必须为 8–128 位' });
         
         let conf = '';
         try {
@@ -4660,15 +4893,33 @@ app.post('/api/sharing/smb/share', async (req, res) => {
             return res.status(500).json({ success: false, error: 'Cannot read smb.conf' });
         }
         
-        const blockStart = conf.indexOf(`[${name}]\n`);
-        if (blockStart !== -1) {
-            return res.status(400).json({ success: false, error: 'Share name already exists, please delete first' });
+        let userExists = true;
+        try { await execFilePromise('/usr/bin/id', ['-u', username]); } catch (_) { userExists = false; }
+        if (!userExists) {
+            await execFilePromise('/usr/sbin/useradd', ['-M', '-s', '/usr/sbin/nologin', username]);
         }
-        
-        const newBlock = `\n[${name}]\n   path = ${path}\n   guest ok = ${guest_ok ? 'yes' : 'no'}\n   read only = ${read_only ? 'yes' : 'no'}\n   comment = ${comment || ''}\n   browseable = yes\n   create mask = 0644\n   directory mask = 0755\n`;
-        await execPromise(`echo "${newBlock}" >> /etc/samba/smb.conf`);
-        await execPromise('systemctl restart smbd');
-        res.json({ success: true });
+        let sambaUserExists = true;
+        try {
+            const { stdout } = await execFilePromise('/usr/bin/pdbedit', ['-L', '-u', username]);
+            sambaUserExists = Boolean(stdout.trim());
+        } catch (_) { sambaUserExists = false; }
+        if (!password && !sambaUserExists) return res.status(400).json({ success: false, error: '新认证用户必须设置至少 8 位密码' });
+        if (password) await setSambaPassword(username, password);
+
+        const cleanComment = String(comment || '').replace(/[\r\n]/g, ' ').slice(0, 160);
+        const newBlock = `[${name}]\n   path = ${sharePath}\n   guest ok = no\n   valid users = ${username}\n   read only = ${read_only ? 'yes' : 'no'}\n   comment = ${cleanComment}\n   browseable = yes\n   force user = libvirt-qemu\n   force group = kvm\n   create mask = 0664\n   directory mask = 0775\n`;
+        const nextConf = replaceSmbShare(conf, name, newBlock);
+        const tempConf = `/tmp/smb.conf.network-monitor-${process.pid}`;
+        fs.writeFileSync(tempConf, nextConf, { mode: 0o600 });
+        try {
+            await execFilePromise('/usr/bin/testparm', ['-s', tempConf]);
+            fs.copyFileSync('/etc/samba/smb.conf', '/etc/samba/smb.conf.network-monitor.bak');
+            fs.copyFileSync(tempConf, '/etc/samba/smb.conf');
+        } finally {
+            try { fs.unlinkSync(tempConf); } catch (_) {}
+        }
+        await execFilePromise('/usr/bin/systemctl', ['reload', 'smbd']);
+        res.json({ success: true, username });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
@@ -4739,6 +4990,18 @@ function loadUpsConfig() {
             notifyOnOffline: false,
             notifyDelaySec: 2
         };
+    }
+}
+
+async function syncNutMonitorService(config) {
+    const usbMode = ['cyberpower_usb', 'usb_hid', 'nut_service', 'apc_usb'].includes(config.mode);
+    const shouldRun = usbMode && config.autoShutdown === true;
+    try {
+        await execPromise(shouldRun
+            ? 'systemctl enable --now nut-monitor'
+            : 'systemctl disable --now nut-monitor', { timeout: 5000 });
+    } catch (e) {
+        console.error('Unable to synchronize NUT shutdown monitor:', e.message);
     }
 }
 
@@ -5063,7 +5326,7 @@ function buildNutUpsPayload(config, kv = {}, upscRaw = '') {
         phaseLockState: `已锁相同步 (Phase Sync: ${freq.toFixed(1)} Hz)`,
         beeperState: beeperEnabled ? '蜂鸣开启' : '静音',
         nutServerActive: 'active (running)',
-        nutMonitorActive: 'active (running)',
+        nutMonitorActive: config.autoShutdown ? 'active (running)' : 'inactive (自动停机未启用)',
         apcupsdActive: 'inactive',
         rawKv: kv,
         rawText: upscRaw
@@ -5813,6 +6076,7 @@ app.post('/api/ups/config', async (req, res) => {
             newCfg.initialized = !!req.body.initialized;
         }
         fs.writeFileSync(UPS_CONFIG_FILE, JSON.stringify(newCfg, null, 2), 'utf8');
+        await syncNutMonitorService(newCfg);
         addUpsEvent('ops', 'UPS 配置与参数已更新', `更新参数: 模式=${newCfg.mode}, 设备=${newCfg.upsName}, 断电推送=${newCfg.notifyEnable ? '已开启' : '已关闭'}`, 'info');
         res.json({ success: true, message: 'UPS 配置及参数已成功保存！', config: newCfg });
     } catch (e) {
@@ -5832,6 +6096,7 @@ app.post('/api/ups/init-connect', async (req, res) => {
             newCfg.tcpHost = '';
         }
         fs.writeFileSync(UPS_CONFIG_FILE, JSON.stringify(newCfg, null, 2), 'utf8');
+        await syncNutMonitorService(newCfg);
 
         // Reset runtime watchdog state
         lastUpsState.initialized = false;
@@ -6044,6 +6309,7 @@ app.post('/api/ups/autodetect', async (req, res) => {
             detectedMode: detectedMode || 'cyberpower_usb',
             detectedUpsName: detectedUpsName || 'cyberpower',
             foundTcpUps,
+            nutAvailable,
             tcpHost: currentCfg.tcpHost || '',
             tcpPort: currentCfg.tcpPort || 8887,
             detected,
@@ -8870,7 +9136,10 @@ app.post('/api/websites/nginx/reload', async (req, res) => {
     }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+require('./server-power')(app);
+
+const attachVMConsole=require('./server-vms')(app,activeSessions);
+const httpServer=app.listen(PORT, '0.0.0.0', () => {
     console.log(`Network Monitor Admin Dashboard running on http://0.0.0.0:${PORT}`);
     applyDiskSpindownSettings().catch(err => {
         console.error('Initial spindown settings apply error:', err.message);
@@ -8878,3 +9147,5 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 
+
+attachVMConsole(httpServer);

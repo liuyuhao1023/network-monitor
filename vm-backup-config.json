@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "time": "04:00",
+  "retentionDays": 3,
+  "targetDir": "/mnt/raid10/vm-backups",
+  "targetVm": "all",
+  "lastRunDate": "2026-11-27"
+}

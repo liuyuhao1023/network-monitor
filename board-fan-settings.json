@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "fans": {
+    "FRNT_FAN4": 100,
+    "FRNT_FAN3": 65
+  },
+  "policies": {
+    "FRNT_FAN3": "disk-temp"
+  }
+}

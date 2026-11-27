@@ -1,0 +1,1438 @@
+/* Hardware console visual system */
+:root,body.theme-dark{--bg-dark:#0c111b;--sidebar-bg:#101722;--header-bg:#0c111bf2;--card-bg:#141d2b;--border-color:#263244;--text-primary:#e9eef6;--text-secondary:#93a3b8;--accent-blue:#62d5cb;--accent-green:#5bd4a0;--accent-purple:#8ba9eb;--bg-primary:#0c111b;--bg-secondary:#141d2b;--sidebar-w:226px;--radius:14px;--mono-color:#91bdeb}
+body.theme-light{--bg-dark:#f1f4f7;--sidebar-bg:#fff;--header-bg:#f1f4f7f2;--card-bg:#fff;--border-color:#dbe3eb;--text-primary:#1e3044;--text-secondary:#64768c;--accent-blue:#087f80;--accent-green:#137a54;--bg-primary:#f1f4f7;--bg-secondary:#fff}
+body{font-family:Inter,'Segoe UI','Microsoft YaHei',sans-serif;font-size:13px;letter-spacing:.1px;line-height:1.6}
+.sidebar{border-color:var(--border-color)}.brand{padding:25px 22px;gap:11px;border:0}.brand-icon{background:#62d5cb;color:#10242b;width:34px;height:34px;border-radius:10px;font-size:16px;font-weight:800}.brand-text h2{font-size:15px;letter-spacing:.8px}.brand-text .sub-title{font-size:10px;letter-spacing:1.8px;text-transform:uppercase}.sidebar-nav{padding:6px 12px 18px;gap:3px}.nav-item{padding:9px 12px;font-size:12px;gap:12px;min-height:38px;border-radius:8px}.nav-item:hover{transform:none;background:#7a95ae12}.nav-item.active{background:#62d5cb13;color:var(--accent-blue);box-shadow:inset 2px 0 var(--accent-blue)}.nav-icon{width:18px;height:18px;display:flex;align-items:center}.nav-icon svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}.ops-nav-label{font-size:9px;letter-spacing:1.8px;color:var(--text-secondary);padding:15px 12px 6px;opacity:.7}.sidebar-footer{font-size:10px;padding:15px 22px}.system-mini-status{font-size:10px}.top-header{padding:20px 30px;border-bottom:1px solid var(--border-color);height:auto;min-height:84px;box-shadow:none;backdrop-filter:blur(14px)}.page-title h1{font-size:17px;letter-spacing:.3px}.page-title p{font-size:11px}.header-actions{gap:9px}.header-actions .btn{font-size:11px;padding:6px 10px}.auto-refresh-toggle{font-size:10px}.content-body{padding:26px 30px;max-width:1680px;width:100%;margin:0 auto}.card{border-radius:14px;padding:22px;background:var(--card-bg);border:1px solid var(--border-color);box-shadow:none}.card:hover{border-color:#42536a}.card-header-bar h3{font-size:14px;font-weight:600}.card-title{font-size:11px;letter-spacing:.4px}.card-value{font-size:32px;font-weight:600;letter-spacing:-1px}.card-sub{font-size:11px}.btn{border-radius:8px;font-size:12px;font-weight:600;box-shadow:none;min-height:34px;transition:background .15s,border-color .15s}.btn-primary{background:var(--accent-blue);color:#092825;border:1px solid var(--accent-blue)}.btn-primary:hover{background:#8be5dd;color:#092825}.btn-secondary{background:transparent;border:1px solid var(--border-color);color:var(--text-primary)}.btn-secondary:hover{background:#7c98b716;border-color:#52677e}.btn:disabled{opacity:.4;cursor:not-allowed}.form-input{background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;font-size:12px;color:var(--text-primary)}.badge{font-weight:500;border-radius:5px}.info-table,.rm-props-table{font-size:12px}.info-table td{padding:9px 6px}.health-banner{border-radius:9px;padding:11px 16px;font-size:12px}.progress-bar-bg{height:4px}.rm-sidebar{background:var(--bg-primary)!important}.rm-item{border-radius:8px}.rm-item.active{border-color:var(--accent-blue)!important;background:#62d5cb0b!important}.rm-detail-big-val{text-shadow:none!important}.rm-logical-core-card{border:1px solid var(--border-color);box-shadow:none!important;border-radius:8px}.rm-logical-cores-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.rm-history-chart{border-radius:8px}.rm-detail-title{font-size:21px}.rm-section-title{font-size:12px;letter-spacing:.4px}.grid-4{gap:16px}.mb-20{margin-bottom:20px}.net-iface-card{border-radius:12px!important;padding:22px!important;box-shadow:none}.ops-page{max-width:1400px;margin:0 auto}.ops-heading{display:flex;justify-content:space-between;align-items:center;gap:24px;margin:4px 0 25px}.ops-eyebrow{font-size:9px;font-weight:600;letter-spacing:2.3px;color:var(--accent-blue);margin-bottom:7px}.ops-heading h2{font-size:27px;font-weight:600;letter-spacing:-.4px;line-height:1.3}.ops-heading p{color:var(--text-secondary);font-size:12px;margin-top:8px}.ops-live{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);white-space:nowrap}.ops-dot{width:6px;height:6px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 0 4px #5bd4a00c}.ops-icon-btn{border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);width:30px;height:30px;border-radius:8px;font-size:19px;cursor:pointer;margin-left:7px}.ops-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:25px}.ops-metric{padding:20px 21px 14px;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg);min-width:0;position:relative;overflow:hidden}.ops-metric>span{color:var(--text-secondary);font-size:11px}.ops-metric strong{display:block;font-size:32px;font-weight:500;letter-spacing:-1px;margin:10px 0 1px;font-variant-numeric:tabular-nums;line-height:1.3}.ops-metric strong small{font-size:11px;color:var(--text-secondary);font-weight:400;margin-left:7px;letter-spacing:0}.ops-metric em{font-style:normal;font-size:10px;color:var(--text-secondary)}.ops-spark{height:27px;margin-top:8px}.ops-spark svg{width:100%;height:100%;overflow:visible}.ops-mini-track{height:3px;margin:27px 0 5px;background:var(--border-color);border-radius:2px}.ops-mini-track.good{background:var(--accent-green)}.ops-section-heading{display:flex;align-items:center;justify-content:space-between;margin:22px 0 13px;gap:12px}.ops-section-heading h3{font-size:13px;font-weight:600}.ops-section-heading>span{color:var(--text-secondary);font-size:10px}.ops-psu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.ops-psu{display:grid;grid-template-columns:96px 1fr;gap:22px;background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:24px}.ops-psu-graphic{height:108px;border:1px solid #435069;border-radius:8px;background:linear-gradient(135deg,#263346,#182231);padding:12px;position:relative}.ops-psu-graphic:before{content:'';display:block;height:46px;border-radius:4px;background:repeating-linear-gradient(0deg,#0c121e 0,#0c121e 3px,#354156 3px,#354156 6px)}.ops-psu-graphic:after{content:'';display:block;width:22px;height:28px;border:5px solid #4c5b6e;background:#09121b;border-radius:4px;margin-top:8px}.ops-psu-led{position:absolute;right:13px;bottom:20px;width:6px;height:6px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 7px #5bd4a050}.ops-psu-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.ops-psu h4{font-size:16px;font-weight:600}.ops-tag{display:inline-block;background:#8399b012;border:1px solid var(--border-color);border-radius:5px;padding:2px 7px;font-size:10px;color:var(--text-secondary);white-space:nowrap}.ops-tag.good{color:#60d7a8;border-color:#60d7a82d;background:#60d7a80b}.ops-tag.amber{color:#e8b97b;border-color:#e8b97b32;background:#e8b97b08}.ops-tag.bad{color:#ff9393;border-color:#ff93932d}.ops-psu dl{display:grid;grid-template-columns:1fr 1fr;margin-top:17px;gap:7px;font-size:11px}.ops-psu dt{color:var(--text-secondary)}.ops-psu dd{text-align:right}.ops-footnote{font-size:10px;color:var(--text-secondary);margin:11px 1px 23px;line-height:1.7}.ops-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}.ops-stack{display:grid;gap:18px}.ops-panel{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:22px;min-width:0}.ops-panel-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:17px}.ops-panel h3{font-size:13px;font-weight:600}.ops-panel h4{font-size:12px;font-weight:500}.ops-table{width:100%;border-collapse:collapse;font-size:11px}.ops-table th{text-align:left;color:var(--text-secondary);font-size:10px;font-weight:500;border-bottom:1px solid var(--border-color);padding:7px 0 12px}.ops-table td{padding:11px 0;border-bottom:1px solid #7893b312}.ops-table td:nth-child(2){font-variant-numeric:tabular-nums;font-family:Consolas,monospace;color:var(--text-primary)}.ops-table td:last-child,.ops-table th:last-child{text-align:right}.ops-table tr:last-child td{border:0}.ops-label{display:block;font-size:11px;color:var(--text-secondary);margin-bottom:8px}.ops-input-row{display:flex;gap:9px}.ops-input-row select{flex:1;min-width:0;width:auto}.ops-input-row .btn{min-width:58px}.ops-muted{color:var(--text-secondary);font-size:11px;line-height:1.8;margin:9px 0}.ops-divider{height:1px;background:var(--border-color);margin:20px 0}.ops-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.ops-danger{background:#ff787809;border:1px solid #ff787835;color:#ff9999}.ops-text-btn{border:0;background:none;color:var(--text-secondary);font-size:11px;cursor:pointer;padding:6px}.ops-result{font-size:11px;color:var(--accent-blue);margin-top:10px;white-space:pre-wrap}.ops-result:empty{display:none}.ops-details{font-size:11px;color:var(--text-secondary);margin-top:15px}.ops-details summary{cursor:pointer;font-size:10px;padding:4px 0}.ops-details p{margin:8px 0}.ops-details pre{white-space:pre-wrap;font-size:10px;margin-top:8px}.ops-events{display:grid;gap:0;max-height:230px;overflow:auto}.ops-event{display:grid;grid-template-columns:6px 1fr;gap:11px;border-bottom:1px solid #7893b312;padding:10px 0;font-size:11px}.ops-event i{width:5px;height:5px;background:var(--accent-blue);border-radius:50%;margin-top:7px}.ops-event small{display:block;color:var(--text-secondary);font-size:9px;margin-top:2px}.ops-temp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ops-temp{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:18px 20px}.ops-temp-top{display:flex;justify-content:space-between;font-size:11px}.ops-temp strong{font-size:27px;font-weight:500;display:block;margin:10px 0}.ops-temp strong small{font-size:12px;color:var(--text-secondary);margin-left:5px}.ops-temp-bar{height:3px;background:var(--border-color);border-radius:2px;overflow:hidden}.ops-temp-bar>span{display:block;height:100%;background:var(--accent-blue)}.ops-temp footer{font-size:9px;color:var(--text-secondary);margin-top:9px}.ops-fan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ops-fan{display:flex;align-items:center;gap:16px;border:1px solid var(--border-color);background:var(--card-bg);border-radius:12px;padding:20px}.ops-fan>svg{width:40px;height:40px;fill:var(--accent-blue);opacity:.8;flex-shrink:0}.ops-fan.idle>svg{fill:var(--text-secondary);opacity:.3}.ops-fan h4{font-size:11px;letter-spacing:.3px;font-weight:500;color:var(--text-secondary)}.ops-fan strong{font-size:22px;font-weight:500;letter-spacing:-.5px}.ops-fan strong small{font-size:10px;font-weight:400;color:var(--text-secondary);margin-left:5px}.ops-fan p{font-size:9px;color:var(--text-secondary);margin-top:3px}.ops-fan-control{display:grid;grid-template-columns:1.2fr 1fr;gap:35px;margin-top:22px}.ops-system-thermal{display:flex;justify-content:space-between;align-items:center;gap:20px}.ops-system-thermal h3{font-size:13px}.ops-system-thermal p{color:var(--text-secondary);font-size:11px;margin:5px 0}.ops-inline-readings{display:flex;flex-wrap:wrap;gap:24px;margin-top:16px}.ops-inline-readings>span{font-size:11px;color:var(--text-secondary)}.ops-inline-readings strong{margin-left:8px;color:var(--text-primary);font-weight:500}.theme-light .ops-psu-graphic{background:#e3eaf2}.theme-light .ops-tag.good{color:#137a54}.theme-light .ops-tag.amber{color:#976020}.theme-light .ops-danger{color:#b22b2b}.theme-light .ops-tag.bad{color:#b22b2b}
+@media(min-width:1500px){.ops-columns{grid-template-columns:1.1fr 1fr}.ops-temp-grid,.ops-fan-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1100px){:root{--sidebar-w:194px}.content-body{padding:22px}.top-header{padding:16px 22px}.ops-heading h2{font-size:23px}.ops-psu{grid-template-columns:66px 1fr;gap:15px;padding:18px}.ops-psu-graphic{height:97px;padding:9px}.header-actions .auto-refresh-toggle{display:none}.ops-metric{padding:16px}.ops-metric strong{font-size:27px}.ops-fan{padding:16px;gap:11px}}
+@media(max-width:850px){:root{--sidebar-w:64px}.brand{padding:18px 15px}.brand-text,.nav-text,.ops-nav-label,.sidebar-footer{display:none}.sidebar-nav{padding:8px}.nav-item{justify-content:center;padding:11px}.nav-icon{width:18px}.ops-columns{grid-template-columns:1fr}.ops-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ops-temp-grid,.ops-fan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.header-actions #user-badge-name,.header-actions .btn-theme-toggle{display:none!important}.ops-heading{align-items:flex-start}.ops-live{font-size:9px}.ops-psu-grid{grid-template-columns:1fr}.ops-psu{grid-template-columns:76px 1fr}.ops-fan-control{grid-template-columns:1fr;gap:10px}.rm-logical-cores-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){.content-body{padding:18px 13px}.top-header{padding:14px}.page-title p{display:none}.page-title h1{font-size:14px}.ops-heading{display:block}.ops-live{margin-top:14px}.ops-heading h2{font-size:23px}.ops-metrics{gap:9px}.ops-metric{padding:14px}.ops-temp-grid,.ops-fan-grid{grid-template-columns:1fr}.ops-panel{padding:17px}.ops-system-thermal{display:block}.grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2{grid-template-columns:1fr}.ops-section-heading>span{max-width:160px;text-align:right}.header-actions .btn{padding:5px 7px}.header-actions #btn-refresh{display:none}.card{padding:16px}}
+
+.admin-container{grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
+@media(max-width:1100px){body.theme-dark,body.theme-light{--sidebar-w:194px}}
+@media(max-width:850px){body.theme-dark,body.theme-light{--sidebar-w:64px}.sidebar{display:flex}.admin-container{grid-template-columns:64px minmax(0,1fr)}.main-content{min-width:0}.top-header{gap:8px}.brand-icon{width:32px;height:32px}.brand{padding:18px 15px}}
+
+/* Expanded physical NIC inventory: bounded cards and wrapping controls. */
+#lan-modes-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)) !important; align-items:stretch; }
+#lan-modes-grid .lan-port-card { min-width:0; box-sizing:border-box; }
+#lan-modes-grid .lan-port-card > div { min-width:0; }
+#lan-modes-grid .lan-mode-options .btn { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; white-space:normal; min-width:0; width:100%; height:auto; min-height:66px; box-sizing:border-box; overflow-wrap:anywhere; gap:5px; }
+#lan-modes-grid .lan-mode-options .btn > div { max-width:100%; white-space:normal; }
+#lan-modes-grid .form-input { min-width:0; max-width:100%; box-sizing:border-box; }
+#lan-modes-grid .grid-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#lan-modes-grid .lan-port-rates { margin:0 0 14px; padding:10px 12px; border-radius:8px; background:var(--bg-primary); color:var(--accent-blue); font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+#lan-modes-grid .lan-port-card > div > div:first-child > div:first-child > div:first-child { flex-wrap:wrap; }
+#lan-modes-grid [id^="lan-link-status-"] { min-width:0; }
+@media(max-width:540px) { #lan-modes-grid .grid-2 { grid-template-columns:1fr; } #lan-modes-grid .lan-port-card > div > div { flex-wrap:wrap; gap:8px; } }
+
+#lan-modes-grid { display:flex !important; flex-direction:column; gap:24px !important; }
+.nic-physical-group { min-width:0; padding:18px; border:1px solid var(--border-color); border-radius:14px; background:var(--bg-primary); }
+.nic-group-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.nic-group-heading h3 { margin:0 0 6px; font-size:17px; }
+.nic-group-heading p { margin:4px 0 0; font-size:12px; color:var(--text-secondary); overflow-wrap:anywhere; }
+.nic-group-ports { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr)); gap:14px; }
+@media(max-width:540px) { .nic-physical-group { padding:10px; } }
+
+/* Interactive adapter map */
+#lan-modes-grid { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:18px !important; align-items:start; }
+.nic-physical-group { padding:22px; overflow:hidden; background:var(--card-bg); }
+.nic-kicker { display:block; font-size:9px; letter-spacing:1.7px; color:var(--accent-blue); margin-bottom:10px; }
+.nic-group-heading h3 { font-size:18px; }
+.nic-group-heading p { max-width:360px; line-height:1.6; }
+.nic-board-model { position:relative; display:flex; align-items:center; gap:20px; padding:24px 18px; border-radius:12px; background:linear-gradient(125deg,#153d3b,#102b31); border:1px solid #32615c; box-shadow:inset 0 0 0 5px #ffffff04; }
+.nic-board-chip { flex:0 0 62px; height:62px; display:flex; flex-direction:column; justify-content:center; align-items:center; border:4px solid #50656b; outline:1px solid #91aca055; background:repeating-linear-gradient(90deg,#253039 0 3px,#141e25 3px 6px); color:#d7e8e6; font-size:13px; letter-spacing:2px; box-shadow:0 4px 12px #0004; }
+.nic-board-chip span { font-size:7px; letter-spacing:1px; margin-top:6px; }
+.nic-model-ports { display:flex; flex:1; min-width:0; justify-content:space-evenly; flex-wrap:wrap; gap:16px 10px; }
+.nic-port-button { display:flex; flex-direction:column; align-items:center; gap:8px; border:1px solid transparent; border-radius:8px; padding:8px; background:transparent; color:#c8d9dc; cursor:pointer; min-width:88px; transition:background .16s,transform .16s,border-color .16s; }
+.nic-port-button:hover { transform:translateY(-3px); background:#ffffff0c; border-color:#749e97; }
+.nic-port-button:focus-visible { outline:2px solid #8af0dc; outline-offset:3px; }
+.nic-port-button.selected { border-color:#71e0ce; background:#71e0ce18; }
+.nic-port-number { font-size:8px; letter-spacing:1px; color:#9bb9b9; }
+.nic-port-button strong { font-size:11px; font-family:monospace; }
+.nic-port-speed { font-size:9px; color:#9bb9b9; }
+.nic-port-button.connected .nic-port-speed { color:#83ebca; }
+.nic-jack { position:relative; display:block; width:65px; height:51px; border:5px solid #9cabb1; border-radius:4px; box-sizing:border-box; background:#0a131b; box-shadow:0 4px 0 #07171d, inset 0 0 0 2px #33424a; }
+.nic-jack:before { content:''; position:absolute; width:35px; height:9px; left:10px; top:5px; background:repeating-linear-gradient(90deg,#d5ba79 0 2px,transparent 2px 5px); }
+.nic-jack:after { content:''; position:absolute; bottom:0; width:23px; height:7px; left:16px; background:#9cabb1; }
+.nic-jack i,.nic-jack b { position:absolute; bottom:-4px; width:8px; height:4px; background:#3e4c4e; border-radius:1px; }
+.nic-jack i { left:0; }.nic-jack b { right:0; }
+.nic-port-button.connected .nic-jack i { background:#60e5b1; box-shadow:0 0 7px #60e5b180; }
+.nic-port-button.connected .nic-jack b { background:#e3c568; }
+.nic-port-button.nic-port-passthrough { border-color: rgba(168,85,247,0.45); background: rgba(168,85,247,0.08); }
+.nic-port-button.nic-port-passthrough .nic-jack i { background: #c084fc; box-shadow: 0 0 8px #c084fc; }
+.nic-port-button.nic-port-passthrough .nic-port-number { color: #c084fc; font-weight: 600; }
+.nic-model-caption { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10px; color:var(--text-secondary); margin-top:13px; }
+.nic-port-panel[hidden] { display:none !important; }
+.nic-port-panel { margin-top:20px; padding-top:18px; border-top:1px solid var(--border-color); animation:nicReveal .18s ease-out; }
+.nic-detail-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; font-size:13px; }
+.nic-port-panel .lan-port-card { padding:14px !important; }
+@keyframes nicReveal { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+@media(max-width:1200px) { #lan-modes-grid { grid-template-columns:1fr !important; } }
+@media(max-width:540px) { .nic-board-chip { display:none; } .nic-board-model { padding:14px 6px; } .nic-physical-group { padding:14px; } .nic-group-heading { align-items:flex-start; } }
+@media(prefers-reduced-motion:reduce) { .nic-port-panel { animation:none; } .nic-port-button { transition:none; } }
+
+.nic-four-port .nic-board-chip { display:none; }
+.nic-four-port .nic-model-ports { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; gap:8px; }
+.nic-four-port .nic-port-button { min-width:0; padding:6px 2px; }
+@media(max-width:540px) { .nic-four-port .nic-model-ports { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* Whole PCIe adapter: board, heatsink, gold edge connector and port bracket. */
+.pcie-model-stage { padding:18px 14px 10px; border-radius:12px; background:radial-gradient(ellipse at 45% 45%,#49627322,transparent 75%),var(--bg-primary); }
+.pcie-card-model { position:relative; display:flex; align-items:stretch; min-height:320px; margin:8px 6px 32px; filter:drop-shadow(0 14px 12px #0003); }
+.pcie-card-model.ports-4 { min-height:420px; }
+.pcie-pcb { position:relative; flex:1; min-width:0; margin:18px 0 18px 0; border:2px solid #377b59; border-right:0; border-radius:12px 0 0 6px; background:linear-gradient(140deg,#236b48,#174c35 65%,#123e2d); box-shadow:inset 0 0 0 5px #12432e,inset 0 0 0 6px #97c48135; overflow:visible; }
+.pcb-traces { position:absolute; inset:15px; opacity:.28; background:repeating-linear-gradient(0deg,transparent 0 17px,#93c598 18px 19px,transparent 20px 26px),repeating-linear-gradient(90deg,transparent 0 27px,#93c598 28px 29px,transparent 30px 45px); clip-path:polygon(0 8%,100% 0,100% 100%,5% 100%); }
+.pcb-silkscreen { position:absolute; top:18px; left:16px; color:#c4dbc2; font:9px/1.7 monospace; letter-spacing:1px; }
+.pcb-heatsink { position:absolute; top:29%; left:14%; width:67%; height:38%; border:3px solid #929ba0; border-radius:4px; background:repeating-linear-gradient(90deg,#b1b9bd 0 3px,#424f56 3px 6px,#1d282e 6px 8px); box-shadow:7px 8px 0 #0b302b88,0 2px 4px #0008,inset 0 4px 0 #dce1e16b; }
+.pcb-heatsink:before,.pcb-heatsink:after { content:''; position:absolute; width:8px; height:8px; border-radius:50%; background:radial-gradient(circle,#29363c 0 2px,#d3d8d8 3px 4px); top:6px; }
+.pcb-heatsink:before { left:5px; }.pcb-heatsink:after { right:5px;top:auto;bottom:6px; }
+.pcb-controller { position:absolute; bottom:18%; left:17%; padding:9px; color:#9ba7a4; background:#152725; outline:4px dashed #a4ae90; font:8px/1.5 monospace; text-align:center; transform:rotate(-4deg); }
+.pcb-components { position:absolute; right:12%; bottom:17%; display:grid; grid-template-columns:repeat(2,10px); gap:8px; }
+.pcb-components i { width:10px;height:19px;border-top:3px solid #b9bdab;border-bottom:3px solid #b9bdab;background:#182b28; }
+.pcb-mark { position:absolute; bottom:7%; left:14px; font:7px monospace; color:#9ac1a0; letter-spacing:1px; }
+.pcb-mount { position:absolute; width:13px;height:13px;border:3px solid #b3b899;border-radius:50%;background:#132b25;left:6px; }
+.mount-top { top:4px; }.mount-bottom { bottom:4px; }
+.pcie-gold-fingers { position:absolute; height:23px; bottom:-23px; left:19%; width:67%; background:repeating-linear-gradient(90deg,#d5aa4f 0 5px,#8a682d 5px 6px,#b99b54 6px 7px); border-bottom:2px solid #e3bc67;border-radius:0 0 3px 3px; }
+.pcie-gold-fingers:after { content:''; position:absolute; left:22%;width:8px;height:23px;background:var(--bg-primary); }
+.pcie-bracket { position:relative; flex:0 0 120px; padding:15px 6px; box-sizing:border-box; border:1px solid #b6c0c7; border-radius:3px; background:linear-gradient(90deg,#697982,#b9c4c9 8%,#8b9aa3 13%,#d5dcdf 84%,#72838d 96%); box-shadow:3px 3px 0 #53636f; }
+.bracket-tab { position:absolute; top:-10px;right:-12px;width:65px;height:13px;border-radius:3px;background:linear-gradient(#d7dfe2,#8d9ea8); }
+.bracket-tab:after { content:''; position:absolute; right:8px; top:4px; width:12px;height:5px;border-radius:5px;background:#34434b; }
+.bracket-foot { position:absolute; bottom:-12px;left:15px;width:26px;height:14px;background:#8e9fa8;border-radius:0 0 4px 4px; }
+.bracket-ports { height:100%;display:flex;flex-direction:column;justify-content:space-evenly;gap:9px; }
+.bracket-ports .nic-port-button { gap:4px;padding:4px 1px;min-width:0;width:100%;color:#142833;border:1px solid #546b7855;background:#ffffff0c; }
+.bracket-ports .nic-port-number { color:#243b48;font-weight:700; }
+.bracket-ports .nic-port-button strong { font-size:10px; }
+.bracket-ports .nic-port-speed { color:#243b48;font-size:8px; }
+.bracket-ports .nic-port-button.connected .nic-port-speed { color:#064d38; }
+.bracket-ports .nic-port-button.selected { outline:2px solid var(--accent-blue);background:#ffffff55; }
+.bracket-ports .nic-port-button:hover { background:#ffffff66;transform:translateX(-3px); }
+.bracket-ports .nic-jack { width:60px;height:43px;border-color:#687880;box-shadow:0 2px 2px #0008,inset 0 0 0 2px #283941; }
+.bracket-ports .nic-jack:after { background:#687880; }
+.pcie-model-legend { display:flex;justify-content:space-between;font-size:10px;color:var(--text-secondary); }
+.rear-io-model { position:relative; padding:22px 28px; border:2px solid #84959e;border-radius:8px;background:linear-gradient(125deg,#667c88,#bdc8cc 40%,#8c9ea8 70%,#c2cdd2);box-shadow:inset 0 0 0 4px #4d616b55,0 8px 15px #0002; }
+.rear-io-label { color:#293e49;font:9px monospace;letter-spacing:1.5px;text-align:center;margin-bottom:16px; }
+.rear-io-ports { display:flex;justify-content:space-evenly;gap:12px;flex-wrap:wrap; }
+.rear-io-ports .nic-port-button { color:#183442; }.rear-io-ports .nic-port-number,.rear-io-ports .nic-port-speed { color:#244251; }.rear-io-ports .nic-port-button.connected .nic-port-speed { color:#07573d; }
+.rear-io-ports .nic-port-button.selected { background:#fff5;border-color:#006f64; }
+.rear-io-screw { position:absolute;top:50%;width:9px;height:9px;border-radius:50%;background:linear-gradient(45deg,#c5d1d6 42%,#415761 44% 56%,#c5d1d6 58%);box-shadow:0 1px 3px #0008; }.screw-left { left:8px; }.screw-right { right:8px; }
+@media(max-width:540px) { .pcie-model-stage { padding:12px 3px; }.pcie-bracket { flex-basis:103px; }.pcie-card-model { min-height:300px; }.pcb-silkscreen { font-size:7px;left:8px; }.pcb-controller { font-size:7px;padding:5px; }.pcb-components { display:none; }.pcb-mark { font-size:6px;left:7px; }.rear-io-model { padding:20px 12px; } }
+
+/* Silicom PE310G4i40EU-T: broad black finned heatsink, left bracket. */
+.model-silicom { flex-direction:row-reverse; }
+.model-silicom .pcie-pcb { margin:18px 0 24px; border:2px solid #377b59; border-left:0; border-radius:0 5px 5px 0; background:linear-gradient(110deg,#16644a,#26775a); }
+.model-silicom .pcie-bracket { flex-basis:110px; }
+.model-silicom .bracket-tab { left:-12px;right:auto; }
+.model-silicom .bracket-foot { left:auto;right:15px; }
+.model-silicom .pcb-heatsink { top:4%;left:12%;width:76%;height:87%; border:0; border-radius:0; background:repeating-linear-gradient(0deg,#080d10 0 6px,#353c40 6px 8px,#151c20 8px 11px);box-shadow:4px 3px 0 #092d23,0 2px 5px #0009;clip-path:polygon(0 0,98% 0,98% 28%,90% 28%,90% 39%,100% 39%,100% 57%,93% 57%,93% 69%,100% 69%,100% 100%,3% 100%,3% 20%,0 20%); }
+.model-silicom .pcb-heatsink:before,.model-silicom .pcb-heatsink:after,.model-silicom .pcb-controller,.model-silicom .pcb-components { display:none; }
+.model-silicom .pcb-silkscreen { top:auto;bottom:4%;left:8%;font-size:6px;letter-spacing:.3px; }
+.model-silicom .pcb-mark { display:none; }
+.model-silicom .pcie-gold-fingers { width:51%;left:22%; }
+.nic-card-silicom { grid-column:2; }
+.model-silicom.pcie-card-model { width:100%;max-width:390px;margin-left:auto;margin-right:auto; }
+.silicom-power-header { position:absolute;right:2%;top:5%;width:25px;height:32px;background:linear-gradient(90deg,#101c24,#374752 40%,#192832);border:2px solid #08151d;box-shadow:2px 3px 2px #0005; }
+.silicom-power-header:after { content:'';position:absolute;left:5px;top:8px;width:12px;height:9px;border-top:3px solid #050a0f;border-bottom:3px solid #050a0f; }
+.silicom-inductors { position:absolute;right:2%;top:35%;height:39%;display:flex;flex-direction:column;justify-content:space-between; }
+.silicom-inductors i { width:22px;height:29px;background:linear-gradient(135deg,#aaa99b,#7e837c);border:1px solid #c2c2b1; }
+.silicom-sticker { position:absolute;left:1%;bottom:15%;width:24px;height:85px;background:#d8dfd5;color:#26352b;writing-mode:vertical-rl;font:7px/1.6 monospace;padding:4px;border:1px solid #a9b6a6; }
+/* Common 82576 dual-port reference: short PCB with small passive sink. */
+.model-generic-dual { min-height:280px;max-width:440px;margin-left:auto;margin-right:auto; }
+.model-generic-dual .pcie-pcb { background:linear-gradient(135deg,#356d37,#1d522b); }
+.model-generic-dual .pcb-heatsink { width:40%;height:30%;left:13%;top:33%;background:repeating-linear-gradient(90deg,#17221b 0 3px,#4c594c 3px 5px,#0b160f 5px 8px);border:2px solid #4e6151; }
+.model-generic-dual .pcb-controller { bottom:17%;left:14%;padding:5px;font-size:6px; }
+.model-generic-dual .pcb-components { right:15%;bottom:15%; }
+.model-generic-dual .pcie-gold-fingers { width:43%;left:30%; }
+.generic-transformers { position:absolute;right:7%;top:25%;height:43%;display:flex;flex-direction:column;justify-content:space-between; }
+.generic-transformers i { width:32px;height:34px;background:linear-gradient(90deg,#15221a,#2f3b30);border:2px solid #566451;box-shadow:0 4px 0 #8c9c7d; }
+@media(max-width:1200px) { .nic-card-silicom { grid-column:auto; } }
+@media(max-width:540px) { .model-silicom .pcie-bracket { flex-basis:99px; }.model-silicom .pcb-heatsink { left:16%;width:70%; }.silicom-power-header { width:17px; }.silicom-inductors i { width:15px; }.generic-transformers i { width:20px; }.silicom-sticker { width:17px;font-size:5px; }.model-generic-dual .pcb-silkscreen { font-size:6px;letter-spacing:0; } }
+
+.nic-model-with-temp { display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:12px;align-items:start; }
+.nic-temperature { padding:14px 8px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-primary);text-align:center;min-width:0; }
+.nic-temperature>span { color:var(--text-secondary);font-size:11px; }
+.nic-temperature strong { font-size:30px;line-height:1.8;font-weight:600;font-variant-numeric:tabular-nums; }
+.nic-temperature small { color:var(--text-secondary);font-size:11px;margin-left:3px; }
+.nic-temperature-source { font-size:10px;line-height:1.7;color:var(--text-secondary);margin:4px 0 0;overflow-wrap:anywhere; }
+@media(max-width:600px) { .nic-model-with-temp { grid-template-columns:minmax(0,1fr); }.nic-temperature { display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:8px 12px; }.nic-temperature strong { font-size:24px; }.nic-temperature-source { max-width:120px; } }
+
+#vm-console-modal[hidden]{display:none!important}#vm-console-modal:not([hidden]){display:flex!important}.vm-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:16px}.vm-form-grid label{font-size:12px;color:var(--text-secondary)}.vm-form-grid .form-input{display:block;width:100%;min-width:0;box-sizing:border-box;margin-top:7px}.vm-instance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}.vm-instance{min-width:0;overflow-wrap:anywhere}.vm-instance .ops-actions{flex-wrap:wrap}.vm-instance select{max-width:100%;display:block;margin:8px 0}#tab-vms .ops-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}#tab-vms .ops-metric strong{font-size:28px}@media(max-width:540px){#tab-vms .ops-metrics{grid-template-columns:1fr}#vm-console-modal{inset:5px!important}}
+/* Ubuntu virtual infrastructure console */
+#tab-vms{--vm-blue:#176b96;--vm-line:#dce3e9}#tab-vms .ops-heading{border-bottom:1px solid var(--vm-line);padding-bottom:20px;margin-bottom:20px}#tab-vms .ops-eyebrow{color:#648095;letter-spacing:2px;font-size:10px}#tab-vms h2{font-size:25px;font-weight:600}#tab-vms .ops-metrics{gap:0;background:var(--bg-card,#fff);border:1px solid var(--vm-line);border-radius:6px;overflow:hidden;margin-bottom:20px}#tab-vms .ops-metric{border:0;border-radius:0;box-shadow:none;background:transparent;border-right:1px solid var(--vm-line);padding:20px 26px}#tab-vms .ops-metric:last-child{border-right:0}#tab-vms .ops-metric strong{color:var(--vm-blue);font-size:30px;font-weight:500}#tab-vms .btn{border-radius:4px;font-size:13px;padding:9px 15px;box-shadow:none}#tab-vms .btn-primary{background:var(--vm-blue);color:white;border:1px solid var(--vm-blue)}.vm-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.vm-toolbar>div{display:flex;gap:8px}.vm-toolbar>span{font-size:12px;color:#7a8b99}#vm-message{font-size:12px;color:var(--vm-blue);margin:8px 0!important;min-height:18px!important}.vm-inventory{border:1px solid var(--vm-line);border-radius:6px;overflow:hidden;background:var(--bg-card,#fff)}.vm-inventory-title{padding:16px 20px;font-weight:600;font-size:14px;border-bottom:1px solid var(--vm-line)}.vm-inventory-title span{margin-left:16px;font-size:12px;color:#80909d;font-weight:400}.vm-table-scroll{overflow-x:auto}.vm-table{width:100%;border-collapse:collapse;text-align:left;white-space:nowrap;font-size:13px}.vm-table th{background:#f2f5f8;color:#637787;font-size:11px;font-weight:600;padding:12px 18px;border-bottom:1px solid var(--vm-line)}.vm-table td{padding:15px 18px;border-bottom:1px solid #edf0f3}.vm-table tbody tr{cursor:pointer}.vm-table tbody tr:hover{background:#f4f9fc}.vm-table tr.selected{background:#eaf4fa}.vm-table tr.selected td:first-child{box-shadow:inset 3px 0 var(--vm-blue)}.vm-row-name{border:0;background:none;color:var(--vm-blue);font:inherit;font-weight:600;cursor:pointer;padding:0}.vm-machine-icon{display:inline-block;margin-right:10px;font-size:19px;color:#6e8b9f}.vm-status:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#97a5b0;margin-right:7px}.vm-status.running:before{background:#36a875}.vm-empty{text-align:center;padding:44px 20px 50px}.vm-empty>span{font-size:42px;color:#a4b9c8}.vm-empty h3{font-size:17px;font-weight:500;margin:12px 0}.vm-empty p{font-size:13px;color:#7d8c98;margin-bottom:20px}#vm-detail .vm-instance{margin-top:22px;border-radius:6px;box-shadow:none;border:1px solid var(--vm-line);padding:22px}#vm-detail h3{font-size:18px;font-weight:600}#vm-detail .ops-details{margin-top:20px;border-top:1px solid var(--vm-line);padding-top:15px}#vm-detail .ops-details summary{color:var(--vm-blue);cursor:pointer;font-size:13px}.vm-editor{border:1px solid var(--vm-line);border-radius:6px;margin:16px 0;padding:22px}.vm-editor[hidden]{display:none!important}.vm-editor h3{font-size:16px;margin-top:0}@media(max-width:600px){.vm-toolbar{align-items:flex-start;flex-direction:column}.vm-inventory-title span{display:block;margin:6px 0 0}#tab-vms .ops-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}#tab-vms .ops-metric{padding:14px 10px}#tab-vms .ops-metric strong{font-size:20px}#tab-vms .ops-metric em{font-size:10px}.vm-table{min-width:650px}}
+#tab-vms{--vm-line:var(--border-color);--vm-blue:#329bd0}body.theme-light #tab-vms{--vm-blue:#176b96}#tab-vms .ops-metrics,.vm-inventory{background:var(--card-bg)}.vm-table th{background:var(--bg-dark);color:var(--text-secondary)}.vm-table td{border-color:var(--border-color);color:var(--text-primary)}.vm-table tbody tr:hover{background:#329bd00d}.vm-table tr.selected{background:#329bd01c}
+.vm-media-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px;padding:14px 0;border-top:1px solid var(--border-color);font-size:12px}.vm-media-summary>span{color:var(--text-secondary)}.vm-media-summary>strong{flex:1;overflow-wrap:anywhere;min-width:130px;font-weight:500}.vm-dialog{background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:8px;width:min(540px,90vw);padding:24px}.vm-dialog::backdrop{background:#0009}.vm-dialog label{display:block;font-size:12px;margin:18px 0}.vm-dialog select{display:block;width:100%;margin-top:8px}.vm-dialog h3{margin-top:0}.vm-iso-empty{padding:25px;text-align:center;color:var(--text-secondary)}#vm-iso-list{margin-top:16px;border:1px solid var(--border-color);border-radius:5px}#vm-iso-list .btn{margin-right:8px;padding:5px 12px}#vm-upload-progress{display:block;width:100%;height:6px;margin-top:18px;accent-color:var(--vm-blue)}#vm-upload-progress[hidden],#vm-upload-cancel[hidden]{display:none!important}#vm-upload-status{font-size:12px;color:var(--text-secondary)}.vm-iso-name{max-width:340px;overflow:hidden;text-overflow:ellipsis}#vm-iso-list tr{cursor:default}
+
+/* Keep drive cards intact while giving each physical disk a full row. */
+#disks-grid-container{display:block!important;width:100%}
+#disks-grid-container .disk-col{display:flex!important;flex-direction:column;width:100%;gap:14px}
+#disks-grid-container .disk-card-screenshot-style{width:100%;box-sizing:border-box;margin:0}
+
+/* Slim full-row drive cards. */
+#disks-grid-container .disk-col{gap:8px}
+#disks-grid-container .disk-card-screenshot-style{padding:7px 12px;gap:3px;border-radius:10px}
+#disks-grid-container .disk-chart-top{gap:1px}
+#disks-grid-container .chart-readout-row{font-size:9px;line-height:1.2}
+#disks-grid-container .chart-readout-row strong{font-size:9px}
+#disks-grid-container .sparkline-wrap,
+#disks-grid-container .disk-sparkline-canvas{height:22px}
+#disks-grid-container .disk-card-middle-line{margin:1px 0 2px}
+#disks-grid-container .disk-icon-box{width:32px;height:32px;border-radius:8px;font-size:14px}
+#disks-grid-container .disk-left-details{gap:9px}
+#disks-grid-container .disk-name-bold{font-size:13px}
+#disks-grid-container .disk-sub-meta{font-size:9px;line-height:1.3}
+#disks-grid-container .disk-type-pill,
+#disks-grid-container .disk-standby-pill,
+#disks-grid-container .disk-temp-pill,
+#disks-grid-container .disk-os-pill,
+#disks-grid-container .disk-health-pill{font-size:9px;padding:2px 6px}
+#disks-grid-container .drawer-toggle-btn{font-size:11px;padding:2px}
+
+/* Network hardware inventory: one full-width adapter per row, no empty slot. */
+#lan-modes-grid{grid-template-columns:1fr!important}
+#lan-modes-grid .nic-card-silicom{grid-column:auto}
+#lan-modes-grid .nic-physical-group{width:100%;box-sizing:border-box}
+#lan-modes-grid .model-silicom.pcie-card-model{width:100%;max-width:none;margin-left:0;margin-right:0}
+#lan-modes-grid .model-silicom .pcie-pcb{min-width:0}
+#lan-modes-grid .model-silicom .pcb-heatsink{left:8%;width:82%}
+#lan-modes-grid .model-silicom .pcie-gold-fingers{left:29%;width:43%}
+
+
+
+
+/* ═══ VMware ESXi 1:1 Host Client Theme for KVM (Dual Mode: Dark & Light) ═══ */
+
+/* ── Dark Mode Theme Variables (Default) ────────────────────────── */
+:root, body.theme-dark {
+  --esxi-bg: #141f26;
+  --esxi-bg-darker: #0e161c;
+  --esxi-top-bg: #1f2f3a;
+  --esxi-nav-bg: #1b2832;
+  --esxi-nav-hover: #233441;
+  --esxi-nav-active: #007cbb;
+  --esxi-card-bg: #18242d;
+  --esxi-card-head: #1f2f3a;
+  --esxi-toolbar-bg: #1c2a33;
+  --esxi-btn-bg: #273743;
+  --esxi-btn-border: #3d5262;
+  --esxi-btn-hover: #314454;
+  --esxi-btn-text: #dbe7f0;
+  --esxi-border: #2d404e;
+  --esxi-border-subtle: #21303c;
+  --esxi-text: #c9d6df;
+  --esxi-text-bright: #ffffff;
+  --esxi-text-muted: #8da4b4;
+  --esxi-table-head: #1b2832;
+  --esxi-table-row: #16222a;
+  --esxi-table-hover: #20313d;
+  --esxi-table-selected: #253a49;
+  --esxi-progress-bg: #233441;
+  --esxi-modal-bg: #1a2832;
+  --esxi-modal-head: #1f303d;
+  --esxi-modal-pane: #18242d;
+  --esxi-status-bar: #111a20;
+  --esxi-summary-bg: #152028;
+  --esxi-heading-bg: #1a2833;
+  --esxi-badge-bg: rgba(255, 255, 255, 0.15);
+  --esxi-badge-color: #ffffff;
+  --esxi-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Light Mode Theme Variables (Clarity Light Mode) ────────────── */
+body.theme-light {
+  --esxi-bg: #ffffff;
+  --esxi-bg-darker: #f1f5f9;
+  --esxi-top-bg: #f1f5f9;
+  --esxi-nav-bg: #f8fafc;
+  --esxi-nav-hover: #e2e8f0;
+  --esxi-nav-active: #007cbb;
+  --esxi-card-bg: #ffffff;
+  --esxi-card-head: #f1f5f9;
+  --esxi-toolbar-bg: #f8fafc;
+  --esxi-btn-bg: #ffffff;
+  --esxi-btn-border: #cbd5e1;
+  --esxi-btn-hover: #f1f5f9;
+  --esxi-btn-text: #1e293b;
+  --esxi-border: #cbd5e1;
+  --esxi-border-subtle: #e2e8f0;
+  --esxi-text: #334155;
+  --esxi-text-bright: #0f172a;
+  --esxi-text-muted: #64748b;
+  --esxi-table-head: #f1f5f9;
+  --esxi-table-row: #ffffff;
+  --esxi-table-hover: #f8fafc;
+  --esxi-table-selected: #e0f2fe;
+  --esxi-progress-bg: #e2e8f0;
+  --esxi-modal-bg: #ffffff;
+  --esxi-modal-head: #f1f5f9;
+  --esxi-modal-pane: #f8fafc;
+  --esxi-status-bar: #ffffff;
+  --esxi-summary-bg: #f8fafc;
+  --esxi-heading-bg: #ffffff;
+  --esxi-badge-bg: #e2e8f0;
+  --esxi-badge-color: #334155;
+  --esxi-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Container & Structure ───────────────────────────────────────── */
+.esxi-theme {
+  display: flex;
+  flex-direction: column;
+  background: var(--esxi-bg);
+  color: var(--esxi-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  border: 1px solid var(--esxi-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 10px;
+  box-shadow: var(--esxi-shadow);
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Top Banner / Breadcrumb */
+.esxi-top-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--esxi-top-bg);
+  border-bottom: 1px solid var(--esxi-border);
+  padding: 8px 16px;
+  font-size: 13px;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+.esxi-brand-icon {
+  color: #0095d9;
+  font-size: 16px;
+  font-weight: bold;
+}
+.esxi-crumb-root { color: var(--esxi-text-muted); }
+.esxi-crumb-sep { color: var(--esxi-text-muted); opacity: 0.6; }
+.esxi-crumb-host { color: var(--esxi-text); }
+.esxi-crumb-active { color: var(--esxi-text-bright); font-weight: 600; }
+.esxi-host-quickinfo {
+  color: var(--esxi-text-muted);
+  font-size: 12px;
+}
+
+/* Layout */
+.esxi-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 720px;
+  background: var(--esxi-bg);
+}
+@media (max-width: 900px) {
+  .esxi-layout { grid-template-columns: 1fr; }
+}
+
+/* Navigator Sidebar */
+.esxi-navigator {
+  background: var(--esxi-nav-bg);
+  border-right: 1px solid var(--esxi-border);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-nav-title {
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--esxi-text-muted);
+  border-bottom: 1px solid var(--esxi-border-subtle);
+}
+.esxi-nav-tree {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+.esxi-nav-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 16px;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--esxi-text);
+  transition: background 0.15s, color 0.15s;
+}
+.esxi-nav-item:hover {
+  background: var(--esxi-nav-hover);
+  color: var(--esxi-text-bright);
+}
+.esxi-nav-item.active {
+  background: var(--esxi-nav-active);
+  color: #ffffff;
+  font-weight: 600;
+}
+.esxi-nav-icon { font-size: 15px; }
+.esxi-nav-label { flex: 1; }
+.esxi-badge {
+  background: var(--esxi-badge-bg);
+  color: var(--esxi-badge-color);
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+}
+.esxi-nav-item.active .esxi-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Main Workspace */
+.esxi-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--esxi-bg);
+  overflow-y: auto;
+  transition: background 0.25s ease;
+}
+.esxi-subview {
+  min-height: 500px;
+}
+.esxi-view-header {
+  margin-bottom: 16px;
+}
+.esxi-view-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--esxi-text-bright);
+  display: flex;
+  align-items: center;
+}
+
+/* Toolbar & Buttons */
+.esxi-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--esxi-toolbar-bg);
+  border-bottom: 1px solid var(--esxi-border);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--esxi-btn-bg);
+  border: 1px solid var(--esxi-btn-border);
+  color: var(--esxi-btn-text);
+  padding: 5px 11px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.esxi-btn:hover:not(:disabled) {
+  background: var(--esxi-btn-hover);
+  color: var(--esxi-text-bright);
+}
+.esxi-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.esxi-btn-primary {
+  background: #007cbb;
+  border-color: #0095d9;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+.esxi-btn-primary:hover:not(:disabled) {
+  background: #0091db;
+  color: #ffffff !important;
+}
+.esxi-btn-danger {
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #ffffff !important;
+}
+.esxi-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  color: #ffffff !important;
+}
+.esxi-btn-sm {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+/* Status Line */
+.esxi-status-bar {
+  padding: 4px 14px;
+  font-size: 12px;
+  min-height: 22px;
+  background: var(--esxi-status-bar);
+  color: var(--esxi-text-muted);
+  border-bottom: 1px solid var(--esxi-border-subtle);
+  transition: background 0.25s ease;
+}
+
+/* DataGrid & Tables */
+.esxi-grid-container {
+  overflow-x: auto;
+  border-bottom: 1px solid var(--esxi-border);
+  background: var(--esxi-table-row);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+.esxi-table th {
+  background: var(--esxi-table-head);
+  color: var(--esxi-text-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--esxi-border);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.25s ease;
+}
+.esxi-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--esxi-border-subtle);
+  color: var(--esxi-text);
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.esxi-table tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.esxi-table tbody tr:hover td {
+  background: var(--esxi-table-hover);
+}
+.esxi-table tbody tr.selected td {
+  background: var(--esxi-table-selected);
+  color: var(--esxi-text-bright);
+}
+.esxi-td-bold {
+  font-weight: 600;
+  color: var(--esxi-text-bright);
+}
+.esxi-vm-name-link {
+  color: var(--esxi-text-bright);
+  text-decoration: none;
+  font-weight: 600;
+}
+body.theme-light .esxi-table tbody tr.selected td .esxi-vm-name-link {
+  color: #0284c7;
+}
+
+/* Badges */
+.esxi-power-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.esxi-power-badge.running {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+body.theme-dark .esxi-power-badge.running {
+  color: #4ade80;
+}
+.esxi-power-badge.off {
+  background: rgba(100, 116, 139, 0.15);
+  color: #64748b;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+/* VM Summary Panel (ESXi 1:1) */
+.esxi-vm-summary {
+  padding: 16px;
+  border-top: 1px solid var(--esxi-border);
+  background: var(--esxi-summary-bg);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-summary-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--esxi-heading-bg);
+  border: 1px solid var(--esxi-border);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-vm-icon-big {
+  font-size: 26px;
+  color: #0095d9;
+}
+.esxi-summary-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--esxi-text-bright);
+}
+.esxi-summary-sub {
+  font-size: 12px;
+  color: var(--esxi-text-muted);
+}
+.esxi-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 16px;
+}
+@media (max-width: 1050px) {
+  .esxi-summary-grid { grid-template-columns: 1fr; }
+}
+
+/* Cards */
+.esxi-card {
+  background: var(--esxi-card-bg);
+  border: 1px solid var(--esxi-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.esxi-card-header {
+  background: var(--esxi-card-head);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--esxi-text-bright);
+  border-bottom: 1px solid var(--esxi-border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.25s ease;
+}
+.esxi-card-body {
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--esxi-text);
+}
+
+/* Console Preview Box */
+.esxi-console-box {
+  background: #0a0f12;
+  border-radius: 4px;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #7991a0;
+  border: 1px solid var(--esxi-border);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.esxi-console-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Hardware Configuration Tree */
+.esxi-hw-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--esxi-border-subtle);
+}
+.esxi-hw-item:last-child {
+  border-bottom: 0;
+}
+.esxi-hw-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--esxi-text-muted);
+}
+.esxi-hw-val {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--esxi-text-bright);
+  text-align: right;
+}
+
+/* Progress Bars */
+.esxi-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--esxi-progress-bg);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: background 0.25s ease;
+}
+.esxi-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #007cbb, #00a2ed);
+  border-radius: 4px;
+}
+
+/* Datastore Browser & Creation Modals */
+.esxi-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.esxi-modal {
+  width: min(92vw, 980px);
+  height: min(88vh, 680px);
+  background: var(--esxi-modal-bg);
+  border: 1px solid var(--esxi-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--esxi-text);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+.esxi-modal-header {
+  background: var(--esxi-modal-head);
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--esxi-text-bright);
+  border-bottom: 1px solid var(--esxi-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.esxi-modal-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 0;
+  background: var(--esxi-bg);
+}
+.esxi-modal-pane-left {
+  background: var(--esxi-modal-pane);
+  border-right: 1px solid var(--esxi-border);
+  padding: 12px;
+  overflow-y: auto;
+}
+.esxi-modal-pane-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--esxi-card-bg);
+}
+.esxi-browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--esxi-toolbar-bg);
+  border-bottom: 1px solid var(--esxi-border);
+}
+.esxi-browser-files {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.esxi-modal-footer {
+  background: var(--esxi-top-bg);
+  padding: 8px 16px;
+  border-top: 1px solid var(--esxi-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--esxi-text-muted);
+}
+
+/* ═══ Additional ESXi Advanced Features Styles ═══ */
+
+/* VM Tabs (Summary / Monitor) */
+.esxi-vm-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  margin-top: 12px;
+  border-bottom: 1px solid var(--esxi-border);
+}
+.esxi-vm-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  color: var(--esxi-text-muted);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.esxi-vm-tab-btn:hover {
+  color: var(--esxi-text-bright);
+  background: var(--esxi-nav-hover);
+}
+.esxi-vm-tab-btn.active {
+  color: #0095d9;
+  background: var(--esxi-card-bg);
+  border-color: var(--esxi-border);
+  font-weight: 600;
+}
+
+/* Dropdown Menu in Toolbar */
+.esxi-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.esxi-dropdown-content {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  min-width: 180px;
+  background: var(--esxi-modal-bg);
+  border: 1px solid var(--esxi-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 4px 0;
+  margin-top: 4px;
+}
+.esxi-dropdown.show .esxi-dropdown-content {
+  display: block;
+}
+.esxi-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--esxi-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.esxi-dropdown-item:hover {
+  background: var(--esxi-nav-hover);
+  color: var(--esxi-text-bright);
+}
+.esxi-dropdown-divider {
+  height: 1px;
+  background: var(--esxi-border-subtle);
+  margin: 4px 0;
+}
+
+/* Recent Tasks Bottom Drawer */
+.esxi-tasks-drawer {
+  border-top: 1px solid var(--esxi-border);
+  background: var(--esxi-card-bg);
+  display: flex;
+  flex-direction: column;
+  transition: max-height 0.25s ease;
+}
+.esxi-tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 16px;
+  background: var(--esxi-top-bg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--esxi-border-subtle);
+}
+.esxi-tasks-header:hover {
+  background: var(--esxi-nav-hover);
+}
+.esxi-tasks-body {
+  max-height: 160px;
+  overflow-y: auto;
+  transition: all 0.25s ease;
+}
+.esxi-tasks-drawer.collapsed .esxi-tasks-body {
+  display: none;
+}
+
+
+/* ═══ Enhanced Navigator Widgets & 3-Column Grid ═══ */
+.esxi-nav-section-title {
+  padding: 12px 16px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--esxi-text-muted);
+  border-top: 1px solid var(--esxi-border-subtle);
+  margin-top: 8px;
+}
+.esxi-nav-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px 14px 10px;
+}
+.esxi-nav-stat-card {
+  background: var(--esxi-card-bg);
+  border: 1px solid var(--esxi-border);
+  border-radius: 6px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.esxi-nav-stat-card:hover {
+  border-color: #0095d9;
+  background: rgba(0, 149, 217, 0.08);
+  transform: translateY(-1px);
+}
+.esxi-nav-stat-card.active-filter {
+  border-color: #0095d9;
+  box-shadow: 0 0 0 2px rgba(0, 149, 217, 0.35);
+  background: rgba(0, 149, 217, 0.12);
+}
+.esxi-nav-stat-val {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--esxi-text-bright);
+  line-height: 1.2;
+}
+.esxi-nav-stat-card.running .esxi-nav-stat-val { color: #22c55e; }
+.esxi-nav-stat-card.paused .esxi-nav-stat-val { color: #f59e0b; }
+.esxi-nav-stat-card.off .esxi-nav-stat-val { color: #94a3b8; }
+.esxi-nav-stat-label {
+  display: block;
+  font-size: 10.5px;
+  color: var(--esxi-text-muted);
+  margin-top: 2px;
+}
+
+.esxi-nav-widget {
+  padding: 6px 14px 12px;
+}
+.esxi-nav-gauge {
+  margin-bottom: 11px;
+}
+.esxi-nav-gauge-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--esxi-text);
+  margin-bottom: 5px;
+}
+.esxi-nav-gauge-head strong {
+  font-size: 11px;
+  color: var(--esxi-text-bright);
+  font-variant-numeric: tabular-nums;
+}
+.esxi-nav-gauge-bg {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.esxi-nav-gauge-fill {
+  height: 100%;
+  background: #0095d9;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.esxi-nav-gauge-fill.green { background: #10b981; }
+.esxi-nav-gauge-fill.blue { background: #38bdf8; }
+
+.esxi-nav-shortcuts {
+  padding: 2px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.esxi-nav-btn {
+  background: var(--esxi-card-bg);
+  border: 1px solid var(--esxi-border);
+  color: var(--esxi-text);
+  border-radius: 5px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.esxi-nav-btn:hover {
+  background: var(--esxi-nav-hover);
+  color: var(--esxi-text-bright);
+  border-color: #0095d9;
+}
+
+.esxi-nav-footer {
+  margin-top: auto;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--esxi-border-subtle);
+  background: rgba(0, 0, 0, 0.15);
+  font-size: 11px;
+}
+
+/* 3-Column Summary Grid */
+.esxi-summary-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1.35fr 1.1fr !important;
+  gap: 16px;
+}
+@media (max-width: 1300px) {
+  .esxi-summary-grid { grid-template-columns: 1fr 1.2fr !important; }
+}
+@media (max-width: 900px) {
+  .esxi-summary-grid { grid-template-columns: 1fr !important; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ANTI-WRAP & CLEAN CHINESE LAYOUT ENHANCEMENTS (ESXi / PVE Dashboard)
+   ══════════════════════════════════════════════════════════════════════════════ */
+.esxi-nav-item {
+  white-space: nowrap !important;
+}
+.esxi-nav-label {
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.esxi-nav-section-title {
+  white-space: nowrap !important;
+  letter-spacing: 0.5px !important;
+}
+.esxi-nav-stat-card,
+.esxi-nav-stat-label,
+.esxi-nav-stat-val {
+  white-space: nowrap !important;
+}
+.esxi-nav-gauge,
+.esxi-nav-gauge-head,
+.esxi-nav-gauge-head span,
+.esxi-nav-gauge-head strong {
+  white-space: nowrap !important;
+}
+.esxi-nav-shortcuts {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+.esxi-nav-shortcut-btn {
+  white-space: nowrap !important;
+  flex: 1 1 auto !important;
+  justify-content: center !important;
+}
+.esxi-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  white-space: nowrap !important;
+  scrollbar-width: thin !important;
+  padding-bottom: 2px !important;
+}
+.esxi-toolbar::-webkit-scrollbar {
+  height: 4px;
+}
+.esxi-toolbar .esxi-btn {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+.esxi-table th,
+.esxi-table td,
+.esxi-table th span,
+.esxi-table td span,
+.esxi-table td strong {
+  white-space: nowrap !important;
+}
+.esxi-prop-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px 14px !important;
+  font-size: 12px !important;
+}
+.esxi-prop-grid > div {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+.esxi-prop-grid > div > div:first-child {
+  white-space: nowrap !important;
+  color: var(--esxi-text-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  margin-bottom: 2px !important;
+}
+.esxi-prop-grid > div > div:last-child {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+.esxi-summary-card {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+.esxi-summary-card * {
+  box-sizing: border-box;
+}
+.esxi-summary-header {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}
+.esxi-breadcrumb {
+  white-space: nowrap !important;
+}
+.esxi-status-pill {
+  white-space: nowrap !important;
+}
+
+/* CT Template Category Pills & Enhanced Modal Layout */
+.ct-tag-pill {
+  background: var(--esxi-card-bg);
+  border: 1px solid var(--esxi-border);
+  color: var(--esxi-text);
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.ct-tag-pill:hover {
+  background: rgba(0, 192, 239, 0.12);
+  border-color: #00c0ef;
+  color: #00c0ef;
+}
+.ct-tag-pill.active {
+  background: #0095d9 !important;
+  border-color: #0095d9 !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.ct-tmpl-item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--esxi-card-bg);
+  border: 1px solid var(--esxi-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.ct-tmpl-item-card:hover {
+  border-color: #0095d9;
+  background: var(--esxi-bg-row-alt);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   macOS ELEGANT DESIGN SYSTEM FOR MODALS & FORM CONTROLS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.esxi-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.42) !important;
+  backdrop-filter: blur(14px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+  z-index: 10000 !important;
+  display: flex;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.esxi-modal-backdrop[style*="display: none"],
+.esxi-modal-backdrop[style*="display:none"],
+.esxi-modal-backdrop[hidden] {
+  display: none !important;
+}
+
+.esxi-modal {
+  border-radius: 14px !important;
+  background: var(--esxi-modal-bg, #ffffff) !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28), 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+.theme-dark .esxi-modal {
+  background: #1e2632 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.65), 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+.esxi-modal-header {
+  background: transparent !important;
+  padding: 14px 20px !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+.theme-dark .esxi-modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.esxi-modal-header .btn-icon,
+.esxi-modal-close {
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  border: none !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #71717a !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  padding: 0 !important;
+  transition: all 0.15s ease !important;
+}
+.theme-dark .esxi-modal-header .btn-icon,
+.theme-dark .esxi-modal-close {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #a1a1aa !important;
+}
+.esxi-modal-header .btn-icon:hover,
+.esxi-modal-close:hover {
+  background: rgba(239, 68, 68, 0.18) !important;
+  color: #ef4444 !important;
+  transform: scale(1.05);
+}
+
+.mac-label,
+.esxi-label {
+  display: block !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--esxi-text, #334155) !important;
+  margin-bottom: 6px !important;
+  letter-spacing: -0.1px !important;
+}
+.theme-dark .mac-label,
+.theme-dark .esxi-label {
+  color: #cbd5e1 !important;
+}
+
+.mac-input,
+.mac-select,
+.esxi-input,
+.esxi-select {
+  width: 100% !important;
+  height: 36px !important;
+  padding: 0 12px !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  border-radius: 8px !important;
+  color: #1e293b !important;
+  font-size: 13px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.theme-dark .mac-input,
+.theme-dark .mac-select,
+.theme-dark .esxi-input,
+.theme-dark .esxi-select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+.mac-input:focus,
+.mac-select:focus,
+.esxi-input:focus,
+.esxi-select:focus {
+  border-color: #0071e3 !important;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.22) !important;
+  background: #ffffff !important;
+}
+.theme-dark .mac-input:focus,
+.theme-dark .mac-select:focus,
+.theme-dark .esxi-input:focus,
+.theme-dark .esxi-select:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+select.mac-select,
+select.esxi-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 14px !important;
+  padding-right: 32px !important;
+}
+.theme-dark select.mac-select,
+.theme-dark select.esxi-select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+}
+
+.mac-grouped-card {
+  background: rgba(0, 0, 0, 0.025) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-radius: 10px !important;
+  padding: 12px 14px !important;
+  transition: all 0.2s ease !important;
+}
+.theme-dark .mac-grouped-card {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.mac-btn {
+  height: 34px !important;
+  padding: 0 16px !important;
+  border-radius: 7px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  transition: all 0.15s ease !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--esxi-text, #334155) !important;
+}
+.theme-dark .mac-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e2e8f0 !important;
+}
+.mac-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+.theme-dark .mac-btn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+.mac-btn-primary {
+  background: linear-gradient(180deg, #0077ed 0%, #0066cc 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.14) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  font-weight: 600 !important;
+}
+.mac-btn-primary:hover {
+  background: linear-gradient(180deg, #1a85f0 0%, #0071e3 100%) !important;
+  box-shadow: 0 2px 6px rgba(0, 113, 227, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.esxi-modal-footer {
+  background: transparent !important;
+  padding: 12px 20px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.theme-dark .esxi-modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   macOS Modal & Card Components - Adaptive Dual Theme (Dark & Light)
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root, body.theme-dark {
+  --mac-modal-bg: #1c1c1e;
+  --mac-modal-header-bg: #26262a;
+  --mac-modal-border: rgba(255, 255, 255, 0.12);
+  --mac-modal-text: #f4f4f5;
+  --mac-modal-text-dim: #a1a1aa;
+  --mac-card-bg: rgba(255, 255, 255, 0.04);
+  --mac-card-border: rgba(255, 255, 255, 0.08);
+  --mac-input-bg: #141416;
+  --mac-input-border: rgba(255, 255, 255, 0.14);
+  --mac-input-text: #ffffff;
+  --mac-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+body.theme-light {
+  --mac-modal-bg: #ffffff;
+  --mac-modal-header-bg: #f8fafc;
+  --mac-modal-border: rgba(0, 0, 0, 0.12);
+  --mac-modal-text: #0f172a;
+  --mac-modal-text-dim: #64748b;
+  --mac-card-bg: #f8fafc;
+  --mac-card-border: rgba(0, 0, 0, 0.08);
+  --mac-input-bg: #ffffff;
+  --mac-input-border: #cbd5e1;
+  --mac-input-text: #0f172a;
+  --mac-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15);
+}
+
+.mac-modal {
+  background: var(--mac-modal-bg) !important;
+  border: 1px solid var(--mac-modal-border) !important;
+  color: var(--mac-modal-text) !important;
+  box-shadow: var(--mac-shadow) !important;
+}
+
+.mac-modal-head {
+  background: var(--mac-modal-header-bg) !important;
+  border-bottom: 1px solid var(--mac-modal-border) !important;
+}
+
+.mac-modal-title {
+  color: var(--mac-modal-text) !important;
+}
+
+.mac-grouped-card {
+  background: var(--mac-card-bg) !important;
+  border: 1px solid var(--mac-card-border) !important;
+}
+
+.mac-grouped-card-title {
+  color: var(--mac-modal-text-dim) !important;
+}
+
+.mac-input, .mac-select {
+  background: var(--mac-input-bg) !important;
+  border: 1px solid var(--mac-input-border) !important;
+  color: var(--mac-input-text) !important;
+}
+.mac-input:focus, .mac-select:focus {
+  border-color: #0071e3 !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2);
+}
+

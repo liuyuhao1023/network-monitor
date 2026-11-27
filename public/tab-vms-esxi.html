@@ -1,0 +1,1481 @@
+            <!-- ══ TAB 4: 虚拟机管理 ═══════════════════════════════════════════════ -->
+            <section id="tab-vms" class="tab-panel">
+                <div class="esxi-theme">
+                    <!-- Top Banner / Breadcrumb -->
+                    <div class="esxi-top-banner">
+                        <div class="esxi-breadcrumbs">
+                            <span class="esxi-brand-icon" style="color:#0095d9;font-size:16px;">▣</span>
+                            <span class="esxi-crumb-root">主机控制台</span>
+                            <span class="esxi-crumb-sep">/</span>
+                            <span class="esxi-crumb-host" id="esxi-host-title">192.168.1.241</span>
+                            <span class="esxi-crumb-sep">/</span>
+                            <span class="esxi-crumb-active" id="esxi-current-crumb">虚拟机</span>
+                        </div>
+                        <div class="esxi-host-quickinfo" id="esxi-quickinfo">
+                            Ubuntu 24.04 LTS · KVM / QEMU 8.2 · libvirt
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <button class="esxi-btn esxi-btn-sm" onclick="fetchVMs()"><i class="fa-solid fa-rotate"></i> 刷新</button>
+                        </div>
+                    </div>
+
+                    <!-- Main Two-Column Layout -->
+                    <div class="esxi-layout">
+                        <!-- Left Navigator -->
+                        <aside class="esxi-navigator">
+                            <div class="esxi-nav-title">导航器</div>
+                            <ul class="esxi-nav-tree">
+                                <li class="esxi-nav-item" data-view="host" onclick="esxiSwitchView('host')">
+                                    <span class="esxi-nav-icon">🖥️</span>
+                                    <span class="esxi-nav-label">主机概览</span>
+                                </li>
+                                <li class="esxi-nav-item active" data-view="vms" onclick="esxiSwitchView('vms')">
+                                    <span class="esxi-nav-icon">▣</span>
+                                    <span class="esxi-nav-label">虚拟机</span>
+                                    <span class="esxi-badge" id="esxi-badge-vms">0</span>
+                                </li>
+                                <li class="esxi-nav-item" data-view="cts" onclick="esxiSwitchView('cts')">
+                                    <span class="esxi-nav-icon"><i class="fa-solid fa-cube" style="color:#00c0ef;"></i></span>
+                                    <span class="esxi-nav-label">CT 容器</span>
+                                    <span class="esxi-badge" id="esxi-badge-cts" style="background:#00c0ef;">0</span>
+                                </li>
+                                <li class="esxi-nav-item" data-view="datastores" onclick="esxiSwitchView('datastores')">
+                                    <span class="esxi-nav-icon">💽</span>
+                                    <span class="esxi-nav-label">存储管理</span>
+                                    <span class="esxi-badge" id="esxi-badge-ds">3</span>
+                                </li>
+                                <li class="esxi-nav-item" data-view="networking" onclick="esxiSwitchView('networking')">
+                                    <span class="esxi-nav-icon">🌐</span>
+                                    <span class="esxi-nav-label">虚拟网络</span>
+                                </li>
+                                <li class="esxi-nav-item" data-view="backups" onclick="esxiSwitchView('backups')">
+                                    <span class="esxi-nav-icon">💾</span>
+                                    <span class="esxi-nav-label">系统盘备份</span>
+                                </li>
+                            </ul>
+
+                            <!-- ─── Navigator Widget 1: 虚拟机运行状态统计 ─── -->
+                            <div class="esxi-nav-section-title">虚拟机状态</div>
+                            <div class="esxi-nav-stat-grid">
+                                <div class="esxi-nav-stat-card running" onclick="esxiFilterVmTable('running')" title="点击筛选已开机虚拟机">
+                                    <span class="esxi-nav-stat-val" id="esxi-stat-running">0</span>
+                                    <span class="esxi-nav-stat-label"><span style="color:#22c55e;margin-right:3px;">●</span>开机</span>
+                                </div>
+                                <div class="esxi-nav-stat-card paused" onclick="esxiFilterVmTable('paused')" title="点击筛选已挂起虚拟机">
+                                    <span class="esxi-nav-stat-val" id="esxi-stat-paused">0</span>
+                                    <span class="esxi-nav-stat-label"><span style="color:#f59e0b;margin-right:3px;">⏸</span>挂起</span>
+                                </div>
+                                <div class="esxi-nav-stat-card off" onclick="esxiFilterVmTable('off')" title="点击筛选已关机虚拟机">
+                                    <span class="esxi-nav-stat-val" id="esxi-stat-off">0</span>
+                                    <span class="esxi-nav-stat-label"><span style="color:#64748b;margin-right:3px;">■</span>关机</span>
+                                </div>
+                            </div>
+
+                            <!-- ─── Navigator Widget 2: 宿主机资源分配概览 ─── -->
+                            <div class="esxi-nav-section-title">主机资源配置</div>
+                            <div class="esxi-nav-widget">
+                                <!-- CPU Allocation Gauge -->
+                                <div class="esxi-nav-gauge">
+                                    <div class="esxi-nav-gauge-head">
+                                        <span><i class="fa-solid fa-microchip" style="color:#0095d9;margin-right:4px;"></i>CPU 已分配</span>
+                                        <strong id="esxi-gauge-cpu-text">0 / 16 核</strong>
+                                    </div>
+                                    <div class="esxi-nav-gauge-bg">
+                                        <div class="esxi-nav-gauge-fill" id="esxi-gauge-cpu-bar" style="width:0%;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- RAM Allocation Gauge -->
+                                <div class="esxi-nav-gauge">
+                                    <div class="esxi-nav-gauge-head">
+                                        <span><i class="fa-solid fa-memory" style="color:#10b981;margin-right:4px;"></i>内存已分配</span>
+                                        <strong id="esxi-gauge-mem-text">0 / 31.2 GiB</strong>
+                                    </div>
+                                    <div class="esxi-nav-gauge-bg">
+                                        <div class="esxi-nav-gauge-fill green" id="esxi-gauge-mem-bar" style="width:0%;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Storage Pool Free Gauge -->
+                                <div class="esxi-nav-gauge" style="margin-bottom:0;">
+                                    <div class="esxi-nav-gauge-head">
+                                        <span><i class="fa-solid fa-database" style="color:#38bdf8;margin-right:4px;"></i>存储池可用</span>
+                                        <strong id="esxi-gauge-ds-text">剩余 1.8 TiB</strong>
+                                    </div>
+                                    <div class="esxi-nav-gauge-bg">
+                                        <div class="esxi-nav-gauge-fill blue" id="esxi-gauge-ds-bar" style="width:30%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ─── Navigator Widget 3: 常用快捷工具 ─── -->
+                            <div class="esxi-nav-section-title">快捷工具</div>
+                            <div class="esxi-nav-shortcuts">
+                                <button type="button" class="esxi-nav-btn" onclick="esxiOpenCreateModal()">
+                                    <i class="fa-solid fa-plus-circle" style="color:#0095d9;"></i> 创建虚拟机
+                                </button>
+                                <button type="button" class="esxi-nav-btn" onclick="esxiOpenDsBrowser()">
+                                    <i class="fa-solid fa-folder-open" style="color:#38bdf8;"></i> 存储浏览器
+                                </button>
+                                <button type="button" class="esxi-nav-btn" onclick="esxiSwitchView('backups')">
+                                    <i class="fa-solid fa-floppy-disk" style="color:#10b981;"></i> 镜像快照与备份
+                                </button>
+                            </div>
+
+                            <!-- ─── Navigator Footer: 底层架构标签 ─── -->
+                            <div class="esxi-nav-footer">
+                                <div style="font-weight:600;color:var(--esxi-text-bright);margin-bottom:2px;">KVM / QEMU 8.2 · libvirt</div>
+                                <div style="color:var(--esxi-text-muted);font-size:10px;">Ubuntu 24.04 LTS · Q35 PCIe · Linux 6.8</div>
+                            </div>
+                        </aside>
+
+                        <!-- Right Main Content Area -->
+                        <main class="esxi-main">
+                            <!-- ─── SUBVIEW 1: 主机概览 (HOST OVERVIEW) ─── -->
+                            <div id="esxi-view-host" class="esxi-subview" style="display:none;padding:16px;">
+                                <div class="esxi-view-header">
+                                    <div class="esxi-view-title"><i class="fa-solid fa-server" style="color:#0095d9;margin-right:8px;"></i>主机概览 - 192.168.1.241</div>
+                                </div>
+                                <div class="esxi-toolbar" style="margin-bottom:16px;">
+                                    <button class="esxi-btn esxi-btn-primary" onclick="esxiOpenCreateModal()"><i class="fa-solid fa-plus"></i> 创建虚拟机</button>
+                                    <button class="esxi-btn" onclick="esxiSwitchView('datastores')"><i class="fa-solid fa-database"></i> 查看数据存储</button>
+                                    <button class="esxi-btn" onclick="esxiOpenDsBrowser()"><i class="fa-solid fa-folder-open"></i> 存储浏览器</button>
+                                </div>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+                                    <div class="esxi-card">
+                                        <div class="esxi-card-header">硬件资源与计算规格</div>
+                                        <div class="esxi-card-body" id="esxi-host-specs-body">
+                                            <div class="esxi-hw-item"><span class="esxi-hw-label">虚拟化 Hypervisor</span><span class="esxi-hw-val" style="color:#0095d9">Ubuntu KVM · QEMU 8.2</span></div>
+                                            <div class="esxi-hw-item"><span class="esxi-hw-label">处理器核心</span><span class="esxi-hw-val" id="esxi-host-cpu-val">16 CPUs · Intel Xeon</span></div>
+                                            <div class="esxi-hw-item"><span class="esxi-hw-label">内存大小</span><span class="esxi-hw-val" id="esxi-host-mem-val">31.2 GiB</span></div>
+                                            <div class="esxi-hw-item"><span class="esxi-hw-label">物理网卡</span><span class="esxi-hw-val">6x Intel 10G X540-AT2</span></div>
+                                            <div class="esxi-hw-item"><span class="esxi-hw-label">数据存储数量</span><span class="esxi-hw-val">3 个 (系统SSD / 第二SSD / RAID10)</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="esxi-card">
+                                        <div class="esxi-card-header">存储容量分布</div>
+                                        <div class="esxi-card-body" id="esxi-host-ds-summary">
+                                            <!-- Dynamically filled -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ─── SUBVIEW 2: 虚拟机管理 (VMS DATAGRID & DETAIL) ─── -->
+                            <div id="esxi-view-vms" class="esxi-subview" style="display:block;">
+                                <!-- Global VM List Toolbar (创建与全局管理) -->
+                                <div class="esxi-toolbar" style="margin-bottom:12px;">
+                                    <button class="esxi-btn esxi-btn-primary" onclick="esxiOpenCreateModal()"><i class="fa-solid fa-plus"></i> 创建虚拟机</button>
+                                    <button class="esxi-btn" onclick="esxiOpenDsBrowser()"><i class="fa-solid fa-folder-open"></i> 存储浏览器</button>
+                                    <button class="esxi-btn" onclick="fetchVMs()"><i class="fa-solid fa-rotate"></i> 刷新</button>
+                                    <div style="flex:1;"></div>
+                                    <span style="font-size:12px;color:var(--esxi-text-muted);display:flex;align-items:center;">
+                                        <i class="fa-solid fa-arrow-down" style="margin-right:6px;color:#0095d9;"></i>在下方列表中选择虚拟机，即可在下方对其实施具体参数配置与电源管理
+                                    </span>
+                                </div>
+                                <div id="vm-message" class="esxi-status-bar" role="status" aria-live="polite">就绪</div>
+
+                                <!-- VM DataGrid -->
+                                <div class="esxi-grid-container">
+                                    <table class="esxi-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:36px;"></th>
+                                                <th>名称</th>
+                                                <th>状态</th>
+                                                <th>客户机操作系统</th>
+                                                <th>主机 CPU</th>
+                                                <th>主机内存</th>
+                                                <th>预置空间</th>
+                                                <th>IP 地址</th>
+                                                <th>自动启动</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="esxi-vm-table-body">
+                                            <!-- Dynamically populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- VM Detail View with Tabs (Summary / Monitor) -->
+                                <div id="esxi-vm-details-wrapper" style="display:none;margin-top:16px;">
+                                    <!-- Dedicated Action Toolbar for Selected VM -->
+                                    <div class="esxi-toolbar" style="margin-bottom:12px;background:var(--esxi-bg-row-alt);border:1px solid var(--esxi-border);border-radius:6px;padding:8px 12px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+                                        <div style="display:flex;align-items:center;margin-right:8px;font-weight:600;font-size:13px;color:var(--esxi-text);">
+                                            <span style="color:#0095d9;margin-right:6px;">▣</span>
+                                            <span id="esxi-vm-bar-name">虚拟机详情</span>
+                                            <span style="margin-left:6px;font-size:11px;color:var(--esxi-text-muted);font-weight:normal;">操作与配置:</span>
+                                        </div>
+
+                                        <!-- Power Dropdown Menu -->
+                                        <div class="esxi-dropdown" id="esxi-power-dropdown-wrap">
+                                            <button class="esxi-btn" id="esxi-tb-power" onclick="esxiTogglePowerDropdown(event)" title="电源操作菜单">
+                                                <i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> 电源 ▾
+                                            </button>
+                                            <div class="esxi-dropdown-content" id="esxi-power-menu">
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('start')"><i class="fa-solid fa-play" style="color:#22c55e;"></i> 开机</a>
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('shutdown')"><i class="fa-solid fa-power-off" style="color:#ef4444;"></i> 关闭电源 (正常关机)</a>
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('force-stop')"><i class="fa-solid fa-triangle-exclamation" style="color:#dc2626;"></i> 强制断电</a>
+                                                <div class="esxi-dropdown-divider"></div>
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('reboot')"><i class="fa-solid fa-arrows-rotate" style="color:#38bdf8;"></i> 重启</a>
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('reset')"><i class="fa-solid fa-rotate-left" style="color:#f97316;"></i> 强制重置</a>
+                                                <div class="esxi-dropdown-divider"></div>
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('pause')"><i class="fa-solid fa-pause" style="color:#a855f7;"></i> 暂停</a>
+                                                <a class="esxi-dropdown-item" onclick="esxiVmAction('resume')"><i class="fa-solid fa-play" style="color:#a855f7;"></i> 恢复</a>
+                                            </div>
+                                        </div>
+
+                                        <!-- EDIT SETTINGS BUTTON -->
+                                        <button class="esxi-btn esxi-btn-primary" id="esxi-tb-edit" onclick="esxiOpenEditSettingsModal()" title="修改 CPU 核数、内存大小、硬盘容量与网络模式">
+                                            <i class="fa-solid fa-gear"></i> 编辑配置
+                                        </button>
+                                        <button class="esxi-btn" id="esxi-tb-console" onclick="esxiVmAction('console')"><i class="fa-solid fa-desktop"></i> Web 控制台</button>
+                                        <button class="esxi-btn" id="esxi-tb-backup" onclick="esxiVmAction('backup-create')" title="立即热备系统盘"><i class="fa-solid fa-floppy-disk"></i> 备份系统盘</button>
+                                        <button class="esxi-btn" id="esxi-tb-clone" onclick="esxiOpenCloneModal()"><i class="fa-solid fa-copy"></i> 克隆</button>
+                                        <button class="esxi-btn" id="esxi-tb-eject" onclick="esxiVmAction('eject-boot-disk')" title="弹出安装镜像并从系统盘启动"><i class="fa-solid fa-eject"></i> 弹出镜像</button>
+                                        <button class="esxi-btn esxi-btn-danger" id="esxi-tb-delete" onclick="esxiVmAction('delete')" title="删除虚拟机"><i class="fa-solid fa-trash"></i> 删除</button>
+                                    </div>
+
+                                    <div class="esxi-vm-tabs">
+                                        <button class="esxi-vm-tab-btn active" id="esxi-tab-btn-summary" onclick="esxiSwitchVmTab('summary')"><i class="fa-solid fa-list-check"></i> 概要</button>
+                                        <button class="esxi-vm-tab-btn" id="esxi-tab-btn-monitor" onclick="esxiSwitchVmTab('monitor')"><i class="fa-solid fa-chart-line"></i> 监控</button>
+                                    </div>
+
+                                    <!-- TAB 1: SUMMARY -->
+                                    <div id="esxi-vm-tab-summary" class="esxi-vm-summary" style="display:block;">
+                                        <div class="esxi-summary-heading">
+                                            <div style="display:flex;align-items:center;gap:10px;">
+                                                <span class="esxi-vm-icon-big">▣</span>
+                                                <div>
+                                                    <div class="esxi-summary-title" id="esxi-sum-name">—</div>
+                                                    <div class="esxi-summary-sub" id="esxi-sum-sub">Linux (64位) · Q35 / KVM</div>
+                                                </div>
+                                            </div>
+                                            <span class="esxi-power-badge" id="esxi-sum-status-badge">已打开电源</span>
+                                        </div>
+
+                                        <div class="esxi-summary-grid">
+                                            <!-- Column 1: Console & General Info -->
+                                            <div class="esxi-card">
+                                                <div class="esxi-card-header">控制台与基本信息</div>
+                                                <div class="esxi-card-body">
+                                                    <div class="esxi-console-box" onclick="esxiVmAction('console')" style="cursor:pointer;" title="点击打开 Web 控制台">
+                                                        <img id="esxi-console-thumb" src="" alt="Console" style="width:100%;height:100%;object-fit:contain;display:none;">
+                                                        <div class="esxi-console-overlay" id="esxi-console-placeholder">
+                                                            <i class="fa-solid fa-display" style="font-size:32px;color:#0095d9;"></i>
+                                                            <span style="font-size:12px;color:#8faec4;">点击打开 Web 控制台</span>
+                                                        </div>
+                                                    </div>
+                                                    <div style="margin-top:8px;margin-bottom:12px;">
+                                                        <button type="button" class="esxi-btn esxi-btn-primary" onclick="esxiVmAction('console')" style="width:100%;justify-content:center;padding:7px 12px;font-weight:600;">
+                                                            <i class="fa-solid fa-desktop" style="margin-right:6px;"></i>Web 控制台
+                                                        </button>
+                                                    </div>
+                                                    <div id="esxi-fnos-direct-link" style="margin-bottom:12px;padding:8px 12px;background:rgba(0,149,217,0.1);border:1px solid rgba(0,149,217,0.3);border-radius:6px;font-size:12px;display:none;">
+                                                        <i class="fa-solid fa-arrow-up-right-from-square" style="color:#0095d9;margin-right:6px;"></i>
+                                                        <strong id="esxi-direct-link-label">同网段 Web 直达: </strong><a id="esxi-fnos-url" href="#" target="_blank" style="color:#38bdf8;text-decoration:underline;"></a>
+                                                    </div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">客户机操作系统</span><span class="esxi-hw-val" id="esxi-sum-os">Linux (64 位)</span></div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">IP 地址</span><span class="esxi-hw-val" id="esxi-sum-ips" style="color:#22c55e;font-weight:600;">—</span></div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">引导方式</span><span class="esxi-hw-val" id="esxi-sum-boot">BIOS / 硬盘优先</span></div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">客户机代理</span><span class="esxi-hw-val" id="esxi-sum-tools" style="color:#22c55e;">正在运行</span></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Column 2: Hardware Configuration Tree -->
+                                            <div class="esxi-card">
+                                                <div class="esxi-card-header" style="display:flex;align-items:center;justify-content:space-between;">
+                                                    <span><i class="fa-solid fa-microchip" style="color:#0095d9;margin-right:6px;"></i>硬件配置</span>
+                                                    <button class="esxi-btn" style="padding:2px 8px;font-size:11px;" onclick="esxiOpenEditSettingsModal()" title="修改 CPU 核心数、内存及磁盘容量">
+                                                        <i class="fa-solid fa-pen-to-square"></i> 编辑硬件
+                                                    </button>
+                                                </div>
+                                                <div class="esxi-card-body" id="esxi-sum-hw-tree">
+                                                    <!-- Dynamically populated hardware tree -->
+                                                </div>
+                                            </div>
+
+                                            <!-- Column 3: Backup & DR Protection Overview -->
+                                            <div class="esxi-card">
+                                                <div class="esxi-card-header" style="display:flex;align-items:center;justify-content:space-between;">
+                                                    <span><i class="fa-solid fa-shield-halved" style="color:#0095d9;margin-right:6px;"></i>系统盘备份与安全保护</span>
+                                                    <button class="esxi-btn" style="padding:2px 8px;font-size:11px;" onclick="esxiSwitchView('backups')" title="前往快照备份管理面板">
+                                                        <i class="fa-solid fa-clock-rotate-left"></i> 全部备份
+                                                    </button>
+                                                </div>
+                                                <div class="esxi-card-body" id="esxi-sum-backup-card">
+                                                    <div style="padding:10px 12px;background:rgba(0,149,217,0.08);border:1px solid rgba(0,149,217,0.25);border-radius:6px;margin-bottom:12px;">
+                                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                                                            <span style="font-size:11px;color:var(--esxi-text-muted);font-weight:600;">系统盘最近备份</span>
+                                                            <span id="esxi-sum-bk-badge" class="ops-tag good">已受保护</span>
+                                                        </div>
+                                                        <div id="esxi-sum-bk-time" style="font-size:13px;font-weight:700;color:var(--esxi-text-bright);">近期已备份</div>
+                                                        <div id="esxi-sum-bk-file" style="font-size:11px;color:var(--esxi-text-muted);font-family:monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
+                                                    </div>
+
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">备份保存目录</span><span class="esxi-hw-val" id="esxi-sum-bk-dir" style="font-size:11px;font-family:monospace;">/mnt/raid10/vm-backups</span></div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">自动每日定时备份</span><span class="esxi-hw-val" id="esxi-sum-bk-sched" style="color:#22c55e;">已启用 (每日 05:00)</span></div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">保留天数</span><span class="esxi-hw-val" id="esxi-sum-bk-ret">7 天</span></div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">快照格式与特性</span><span class="esxi-hw-val">QCOW2 动态增量盘</span></div>
+
+                                                    <div style="margin-top:14px;">
+                                                        <button type="button" class="esxi-btn esxi-btn-primary" onclick="vmCreateBackupNow(vmSelected)" style="width:100%;justify-content:center;padding:7px 10px;font-size:12px;font-weight:600;">
+                                                            <i class="fa-solid fa-camera" style="margin-right:6px;"></i>立即创建快照备份
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- TAB 2: MONITOR -->
+                                    <div id="esxi-vm-tab-monitor" class="esxi-vm-summary" style="display:none;padding:16px;">
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+                                            <div class="esxi-card">
+                                                <div class="esxi-card-header">
+                                                    <span><i class="fa-solid fa-microchip" style="color:#0095d9;margin-right:6px;"></i>CPU 使用状态</span>
+                                                    <span id="esxi-mon-cpu-status" class="ops-tag good">正常</span>
+                                                </div>
+                                                <div class="esxi-card-body">
+                                                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;">
+                                                        <span>虚拟 CPU 核心</span>
+                                                        <strong id="esxi-mon-cpu-cores">2 vCPUs</strong>
+                                                    </div>
+                                                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;">
+                                                        <span>宿主机绑核模式</span>
+                                                        <strong style="color:#0095d9;">Host-Passthrough (最高性能)</strong>
+                                                    </div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">架构</span><span class="esxi-hw-val">x86_64 · Q35 Chipset</span></div>
+                                                </div>
+                                            </div>
+                                            <div class="esxi-card">
+                                                <div class="esxi-card-header">
+                                                    <span><i class="fa-solid fa-memory" style="color:#a855f7;margin-right:6px;"></i>常驻内存消耗</span>
+                                                    <span id="esxi-mon-mem-status" class="ops-tag good">健康</span>
+                                                </div>
+                                                <div class="esxi-card-body">
+                                                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;">
+                                                        <span>配置最大内存</span>
+                                                        <strong id="esxi-mon-mem-max">4096 MiB</strong>
+                                                    </div>
+                                                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;">
+                                                        <span>常驻内存</span>
+                                                        <strong id="esxi-mon-mem-rss" style="color:#a855f7;">读取中…</strong>
+                                                    </div>
+                                                    <div class="esxi-hw-item"><span class="esxi-hw-label">内存分配策略</span><span class="esxi-hw-val">按需实际消耗</span></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                                                        <!-- ─── SUBVIEW 2: CT 容器管理 (LXC CONTAINERS - PVE 风格) ─── -->
+                            <div id="esxi-view-cts" class="esxi-subview" style="display:none;">
+                                <!-- CT 工具栏 (PVE 优雅生命周期动作 + 检索过滤) -->
+                                <div class="esxi-toolbar" style="margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+                                    <button class="esxi-btn esxi-btn-primary" onclick="vmOpenCreateCtModal()"><i class="fa-solid fa-plus"></i> 创建 CT 容器</button>
+                                    <div style="width:1px;height:18px;background:var(--esxi-border);margin:0 2px;"></div>
+                                    <button class="esxi-btn" id="esxi-ct-btn-start" onclick="ctActionSelected('start')" disabled><i class="fa-solid fa-play" style="color:#22c55e;"></i> 启动</button>
+                                    <button class="esxi-btn" id="esxi-ct-btn-shutdown" onclick="ctActionSelected('stop')" disabled><i class="fa-solid fa-power-off" style="color:#ef4444;"></i> 关机</button>
+                                    <button class="esxi-btn" id="esxi-ct-btn-kill" onclick="ctActionSelected('kill')" disabled><i class="fa-solid fa-ban" style="color:#f59e0b;"></i> 强制停止</button>
+                                    <button class="esxi-btn" id="esxi-ct-btn-reboot" onclick="ctActionSelected('restart')" disabled><i class="fa-solid fa-rotate-right" style="color:#0095d9;"></i> 重启</button>
+                                    <button class="esxi-btn" id="esxi-ct-btn-edit" onclick="ctOpenEditSettingsModal()" disabled><i class="fa-solid fa-sliders" style="color:#0ea5e9;"></i> 编辑配置</button>
+                                    <button class="esxi-btn" id="esxi-ct-btn-console" onclick="ctOpenSelectedConsole()" disabled><i class="fa-solid fa-terminal" style="color:#38bdf8;"></i> 控制台</button>
+                                    <button class="esxi-btn" id="esxi-ct-btn-destroy" onclick="ctActionSelected('destroy')" disabled style="color:#ef4444;"><i class="fa-solid fa-trash-can"></i> 销毁</button>
+                                    <div style="flex:1;"></div>
+                                    <!-- 快捷检索与状态筛选 (支持多容器管理) -->
+                                    <div style="display:flex;align-items:center;gap:6px;">
+                                        <input type="text" placeholder="🔍 快速搜索 CT..." oninput="esxiFilterCtTable(this.value)" class="mac-input" style="width:140px;height:28px;padding:2px 8px;font-size:12px;border-radius:6px;">
+                                        <button class="esxi-btn esxi-btn-sm" onclick="esxiFilterCtTable(undefined, 'all')" title="显示全部">全部</button>
+                                        <button class="esxi-btn esxi-btn-sm" onclick="esxiFilterCtTable(undefined, 'running')" title="仅显示运行中"><span style="color:#22c55e;">●</span> 运行</button>
+                                    </div>
+                                    <button class="esxi-btn" onclick="vmOpenCtTemplateModal()" title="从中科大镜像源下载官方 LXC 模板"><i class="fa-solid fa-box-archive" style="color:#00c0ef;"></i> 模板管理</button>
+                                    <button class="esxi-btn" onclick="fetchCts()"><i class="fa-solid fa-rotate"></i> 刷新</button>
+                                </div>
+
+                                <!-- CT 容器表格清单 -->
+                                <div class="esxi-table-wrap" style="margin-bottom:16px;">
+                                    <table class="esxi-table" id="esxi-ct-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:36px;text-align:center;"></th>
+                                                <th style="width:70px;">VMID</th>
+                                                <th>容器名称</th>
+                                                <th style="width:90px;">运行状态</th>
+                                                <th style="width:140px;">IP 地址</th>
+                                                <th style="width:80px;">CPU 限制</th>
+                                                <th style="width:130px;">内存使用 / 配额</th>
+                                                <th style="width:140px;">操作系统模板</th>
+                                                <th style="width:70px;text-align:center;">自启</th>
+                                                <th style="width:100px;text-align:center;">快捷控制</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="esxi-ct-tbody">
+                                            <tr>
+                                                <td colspan="10" style="text-align:center;padding:30px;color:var(--esxi-text-muted);">
+                                                    <i class="fa-solid fa-spinner fa-spin" style="margin-right:8px;"></i>正在载入 CT 容器...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 选定 CT 容器 3 列密集详情摘要面板 (与虚拟机摘要完全对齐) -->
+                                <div id="esxi-ct-details-wrapper" style="display:none;background:var(--esxi-bg-card);border:1px solid var(--esxi-border);border-radius:4px;overflow:hidden;">
+                                    <div class="esxi-summary-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--esxi-bg-table-head);border-bottom:1px solid var(--esxi-border);">
+                                        <div style="display:flex;align-items:center;gap:10px;">
+                                            <span style="font-size:16px;font-weight:600;color:var(--esxi-text);" id="esxi-ct-sum-name">CT 容器</span>
+                                            <span class="esxi-status-pill" id="esxi-ct-sum-state" style="background:rgba(34,197,94,0.15);color:#22c55e;">RUNNING</span>
+                                            <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:rgba(0,192,239,0.15);color:#00c0ef;font-weight:600;" id="esxi-ct-sum-vmid">VMID: 100</span>
+                                        </div>
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            <button class="esxi-btn esxi-btn-sm" onclick="ctOpenSelectedConsole()"><i class="fa-solid fa-terminal" style="color:#00c0ef;"></i> 打开控制台</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="esxi-summary-grid" style="display:grid;grid-template-columns:1.05fr 1.35fr 1.1fr;gap:16px;padding:16px;">
+                                        <!-- Column 1: 运行状态与控制台 -->
+                                        <div class="esxi-summary-card" style="background:var(--esxi-bg-dark);border:1px solid var(--esxi-border);border-radius:4px;padding:14px;">
+                                            <div style="font-size:12px;font-weight:600;color:var(--esxi-text-dim);margin-bottom:12px;border-bottom:1px solid var(--esxi-border);padding-bottom:6px;">
+                                                <i class="fa-solid fa-circle-play" style="color:#0095d9;margin-right:6px;"></i>状态与运行控制
+                                            </div>
+                                            <div style="text-align:center;padding:16px 8px;background:rgba(0,0,0,0.25);border-radius:4px;margin-bottom:12px;">
+                                                <i class="fa-solid fa-cube" style="font-size:42px;color:#00c0ef;margin-bottom:8px;"></i>
+                                                <div style="font-size:14px;font-weight:600;color:var(--esxi-text);" id="esxi-ct-sum-title">alpine-100</div>
+                                                <div style="font-size:12px;color:var(--esxi-text-muted);margin-top:4px;">PID: <span id="esxi-ct-sum-pid">-</span> · Uptime: 运行中</div>
+                                            </div>
+                                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                                <div style="display:flex;justify-content:space-between;font-size:12px;">
+                                                    <span style="color:var(--esxi-text-muted);">容器 IPv4:</span>
+                                                    <strong id="esxi-ct-sum-ip" style="color:#0095d9;cursor:pointer;" onclick="copyCtIp()" title="点击复制 IP">-</strong>
+                                                </div>
+                                                <div style="display:flex;justify-content:space-between;font-size:12px;">
+                                                    <span style="color:var(--esxi-text-muted);">开机自启:</span>
+                                                    <span id="esxi-ct-sum-autostart">否</span>
+                                                </div>
+                                                <button class="esxi-btn esxi-btn-primary" style="margin-top:6px;width:100%;justify-content:center;padding:8px;" onclick="ctOpenSelectedConsole()">
+                                                    <i class="fa-solid fa-terminal"></i> 打开 Web 控制台 (终端)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Column 2: 硬件与计算资源配额 -->
+                                        <div class="esxi-summary-card" style="background:var(--esxi-bg-dark);border:1px solid var(--esxi-border);border-radius:4px;padding:14px;">
+                                            <div style="font-size:12px;font-weight:600;color:var(--esxi-text-dim);margin-bottom:12px;border-bottom:1px solid var(--esxi-border);padding-bottom:6px;">
+                                                <i class="fa-solid fa-microchip" style="color:#0095d9;margin-right:6px;"></i>计算与资源限制
+                                            </div>
+                                            <div class="esxi-prop-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;font-size:12px;">
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">CPU 核心绑定</div>
+                                                    <div style="font-weight:600;color:var(--esxi-text);" id="esxi-ct-sum-cpu">共享所有核心</div>
+                                                </div>
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">系统架构</div>
+                                                    <div style="font-weight:600;color:var(--esxi-text);" id="esxi-ct-sum-arch">x86_64</div>
+                                                </div>
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">内存配额</div>
+                                                    <div style="font-weight:600;color:var(--esxi-text);" id="esxi-ct-sum-mem">512 MiB</div>
+                                                </div>
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">内存已使用</div>
+                                                    <div style="font-weight:600;color:#22c55e;" id="esxi-ct-sum-memused">0 MiB</div>
+                                                </div>
+                                                <div style="grid-column:span 2;">
+                                                    <div style="color:var(--esxi-text-muted);margin-bottom:3px;">根文件系统</div>
+                                                    <div style="font-weight:500;color:var(--esxi-text);font-family:monospace;font-size:11px;background:rgba(0,0,0,0.3);padding:4px 6px;border-radius:3px;word-break:break-all;" id="esxi-ct-sum-rootfs">/var/lib/lxc/...</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Column 3: 网络与隔离环境 -->
+                                        <div class="esxi-summary-card" style="background:var(--esxi-bg-dark);border:1px solid var(--esxi-border);border-radius:4px;padding:14px;">
+                                            <div style="font-size:12px;font-weight:600;color:var(--esxi-text-dim);margin-bottom:12px;border-bottom:1px solid var(--esxi-border);padding-bottom:6px;">
+                                                <i class="fa-solid fa-network-wired" style="color:#0095d9;margin-right:6px;"></i>网络与系统环境
+                                            </div>
+                                            <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;">
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">OS 发行版 / 镜像</div>
+                                                    <div style="font-weight:600;color:#38bdf8;" id="esxi-ct-sum-os">Alpine Linux</div>
+                                                </div>
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">宿主机网桥</div>
+                                                    <div style="font-weight:600;color:var(--esxi-text);" id="esxi-ct-sum-bridge">lxcbr0 (NAT/DHCP 10.0.3.x)</div>
+                                                </div>
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">虚拟网卡类型</div>
+                                                    <div style="font-weight:600;color:var(--esxi-text);">veth 虚拟网卡对</div>
+                                                </div>
+                                                <div>
+                                                    <div style="color:var(--esxi-text-muted);">隔离技术</div>
+                                                    <div style="font-weight:600;color:var(--esxi-text);">Linux cgroup v2 + Namespaces</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+<!-- ─── SUBVIEW 3: 数据存储管理 ─── -->
+                            <div id="esxi-view-datastores" class="esxi-subview" style="display:none;padding:16px;">
+                                <div class="esxi-view-header">
+                                    <div class="esxi-view-title"><i class="fa-solid fa-database" style="color:#0095d9;margin-right:8px;"></i>数据存储</div>
+                                </div>
+                                <div class="esxi-toolbar" style="margin-bottom:16px;">
+                                    <button class="esxi-btn esxi-btn-primary" onclick="esxiOpenDsBrowser()"><i class="fa-solid fa-folder-open"></i> 存储浏览器</button>
+                                    <button class="esxi-btn" onclick="fetchVMs()"><i class="fa-solid fa-rotate"></i> 刷新</button>
+                                </div>
+
+                                <div class="esxi-grid-container" style="margin-bottom:20px;">
+                                    <table class="esxi-table">
+                                        <thead>
+                                            <tr>
+                                                <th>名称</th>
+                                                <th>物理设备 / 阵列</th>
+                                                <th>文件系统类型</th>
+                                                <th>容量</th>
+                                                <th>可用空间</th>
+                                                <th>使用率</th>
+                                                <th>挂载点</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="esxi-datastores-tbody">
+                                            <!-- Dynamically populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;" id="esxi-ds-cards-grid">
+                                    <!-- Cards with capacity bars -->
+                                </div>
+                            </div>
+
+                            <!-- ─── SUBVIEW 4: 虚拟网络管理 ─── -->
+                            <div id="esxi-view-networking" class="esxi-subview" style="display:none;padding:16px;">
+                                <div class="esxi-view-header">
+                                    <div class="esxi-view-title"><i class="fa-solid fa-network-wired" style="color:#0095d9;margin-right:8px;"></i>网络配置</div>
+                                </div>
+                                <div class="esxi-card" style="margin-bottom:16px;">
+                                    <div class="esxi-card-header">端口组与虚拟交换机</div>
+                                    <div class="esxi-card-body">
+                                        <div class="esxi-hw-item">
+                                            <span class="esxi-hw-label"><strong>VM Network (局域网同网段)</strong></span>
+                                            <span class="esxi-hw-val"><span class="ops-tag good">Macvtap Bridge</span> 绑定物理网卡 <code>enp8s0f1</code> · 自动获取 192.168.1.x</span>
+                                        </div>
+                                        <div class="esxi-hw-item">
+                                            <span class="esxi-hw-label"><strong>Default NAT Network</strong></span>
+                                            <span class="esxi-hw-val"><span class="ops-tag">NAT</span> 网桥 <code>virbr0</code> · 192.168.122.0/24 (仅出外网)</span>
+                                        </div>
+                                        <div class="esxi-hw-item">
+                                            <span class="esxi-hw-label"><strong>Passthrough Network (网卡独占直通)</strong></span>
+                                            <span class="esxi-hw-val"><span class="ops-tag">Direct Passthrough</span> 独占指定 10G 物理接口</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="esxi-card">
+                                    <div class="esxi-card-header">物理网卡清单 (6x 10G X540)</div>
+                                    <div class="esxi-card-body" id="esxi-nics-body">
+                                        <!-- Dynamically populated -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ─── SUBVIEW 5: 系统盘备份与灾备 (BACKUP & DR) ─── -->
+                            <div id="esxi-view-backups" class="esxi-subview" style="display:none;padding:16px;">
+                                <div class="esxi-view-header">
+                                    <div class="esxi-view-title"><i class="fa-solid fa-floppy-disk" style="color:#0095d9;margin-right:8px;"></i>系统盘备份管理</div>
+                                </div>
+                                <div id="vm-backup-notice" style="display:none;margin-bottom:14px;border-radius:6px;padding:10px 14px;font-size:12px;transition:all 0.3s ease;"></div>
+                                <div class="esxi-toolbar" style="margin-bottom:16px;">
+                                    <button class="esxi-btn esxi-btn-primary" onclick="esxiOpenBackupModal()"><i class="fa-solid fa-plus"></i> 立即热备系统盘</button>
+                                    <button class="esxi-btn" onclick="vmFetchBackups()"><i class="fa-solid fa-rotate"></i> 刷新备份列表</button>
+                                </div>
+
+                                <div class="esxi-card" style="margin-bottom:16px;">
+                                    <div class="esxi-card-header" style="display:flex;align-items:center;justify-content:space-between;"><span>⚙️ 定时自动备份策略</span><span id="vm-sched-header-badge"></span></div>
+                                    <div class="esxi-card-body">
+                                        <form onsubmit="vmSaveSchedule(event)">
+                                            <div class="vm-form-grid">
+                                                <label>定时任务状态
+                                                    <select class="form-input" id="vm-sched-enabled" style="font-weight:600;">
+                                                        <option value="true" style="color:#10b981;font-weight:600;">🟢 开启每日自动备份</option>
+                                                        <option value="false" style="color:#ef4444;font-weight:600;">🔴 关闭每日自动备份 (暂停)</option>
+                                                    </select>
+                                                </label>
+                                                <label>备份触发时间
+                                                    <input class="form-input" id="vm-sched-time" type="time" value="05:00" required>
+                                                </label>
+                                                <label>版本保留时间
+                                                    <select class="form-input" id="vm-sched-retention">
+                                                        <option value="7">保留 7 天 (1 周版本，自动轮转清理)</option>
+                                                        <option value="14">保留 14 天 (2 周版本)</option>
+                                                        <option value="30">保留 30 天 (1 个月版本)</option>
+                                                        <option value="3">保留 3 天</option>
+                                                    </select>
+                                                </label>
+                                                <label>备份存放数据存储 / 目录
+                                                    <select class="form-input" id="vm-sched-target"></select>
+                                                </label>
+                                                <label>备份虚拟机对象
+                                                    <select class="form-input" id="vm-sched-vm">
+                                                        <option value="all">全部虚拟机</option>
+                                                    </select>
+                                                </label>
+                                            </div>
+                                            <div class="ops-actions" style="margin-top:12px;display:flex;align-items:center;gap:12px;">
+                                                <button class="esxi-btn esxi-btn-primary" type="submit" id="vm-sched-submit-btn"><i class="fa-solid fa-floppy-disk"></i> 保存策略</button>
+                                                <span id="vm-sched-status" class="ops-muted" style="align-self:center;font-size:12px;"></span>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="esxi-card">
+                                    <div class="esxi-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                                        <span>备份版本清单</span>
+                                        <div style="display:flex;align-items:center;gap:10px;">
+                                            <label class="ops-muted" style="font-size:12px;">筛选: 
+                                                <select id="vm-backup-filter" class="form-input" style="padding:2px 8px;font-size:12px;" onchange="vmFilterBackups()">
+                                                    <option value="">全部虚拟机</option>
+                                                </select>
+                                            </label>
+                                            <span id="vm-backup-space" class="ops-muted" style="font-size:12px;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="esxi-card-body" style="padding:0;">
+                                        <div id="vm-backup-list" class="esxi-grid-container" style="border:0;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+
+                    <!-- ══ ESXi Bottom Drawer: 近期任务 ══ -->
+                    <div class="esxi-tasks-drawer" id="esxi-tasks-drawer">
+                        <div class="esxi-tasks-header" onclick="esxiToggleTasksDrawer()">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span id="esxi-tasks-toggle-icon">▾</span>
+                                <strong>近期任务</strong>
+                                <span class="esxi-badge" id="esxi-tasks-count">0</span>
+                            </div>
+                            <span style="font-size:11px;color:var(--esxi-text-muted);">点击折叠 / 展开</span>
+                        </div>
+                        <div class="esxi-tasks-body" id="esxi-tasks-body">
+                            <table class="esxi-table">
+                                <thead>
+                                    <tr>
+                                        <th>任务名称</th>
+                                        <th>目标对象</th>
+                                        <th>发起用户</th>
+                                        <th>状态</th>
+                                        <th>开始时间</th>
+                                        <th>耗时</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="esxi-tasks-tbody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════ Create VM Backup Modal ════ -->
+                <div id="esxi-backup-modal" class="esxi-modal-backdrop" style="display:none;">
+                    <div class="esxi-modal" style="width:min(92vw,560px);height:auto;max-height:90vh;">
+                        <div class="esxi-modal-header">
+                            <div><i class="fa-solid fa-floppy-disk" style="color:#0095d9;margin-right:8px;"></i>创建快照备份</div>
+                            <button class="btn-icon" onclick="esxiCloseBackupModal()"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <form onsubmit="esxiSubmitBackup(event)" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+                            <div style="background:rgba(0,149,217,0.1);border:1px solid rgba(0,149,217,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--esxi-text);">
+                                <i class="fa-solid fa-shield-halved" style="color:#0095d9;margin-right:6px;"></i>
+                                <strong>在线热备技术说明：</strong>仅对虚拟机的<strong>系统引导盘 (QCOW2)</strong> 进行快照级热备，直通的物理数据硬盘已隔离排除；备份过程虚拟机无需关机，业务无感平滑运行。
+                            </div>
+
+                            <div class="vm-form-grid" style="grid-template-columns:1fr;gap:12px;">
+                                <label>选择备份虚拟机
+                                    <select class="form-input" id="esxi-bk-vm" required></select>
+                                </label>
+                                <label>备份存放存储 / 目标目录
+                                    <select class="form-input" id="esxi-bk-target" required></select>
+                                </label>
+                                <label>备份备注说明 (可选)
+                                    <input class="form-input" id="esxi-bk-note" type="text" placeholder="例如：升级系统前热备 / 稳定版归档" maxlength="60">
+                                </label>
+                            </div>
+
+                            <div id="esxi-bk-progress-box" style="display:none;background:var(--esxi-bg-row-alt);border:1px solid var(--esxi-border);border-radius:6px;padding:12px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px;">
+                                    <span id="esxi-bk-progress-text" style="color:#0095d9;font-weight:600;"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>正在执行在线热备…</span>
+                                    <strong id="esxi-bk-progress-pct" style="font-family:monospace;color:#0095d9;">0%</strong>
+                                </div>
+                                <div style="width:100%;height:8px;background:var(--esxi-border);border-radius:4px;overflow:hidden;">
+                                    <div id="esxi-bk-progress-bar" style="width:0%;height:100%;background:#0095d9;transition:width 0.3s ease;"></div>
+                                </div>
+                                <div id="esxi-bk-progress-sub" style="font-size:11px;color:var(--esxi-text-muted);margin-top:6px;text-align:right;">准备中…</div>
+                            </div>
+
+                            <div class="esxi-modal-actions" style="margin-top:8px;display:flex;justify-content:flex-end;gap:10px;">
+                                <button type="button" class="esxi-btn" onclick="esxiCloseBackupModal()" id="esxi-bk-cancel-btn">取消</button>
+                                <button type="submit" class="esxi-btn esxi-btn-primary" id="esxi-bk-start-btn">
+                                    <i class="fa-solid fa-bolt"></i> 立即开始热备
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ════ Edit VM Settings Modal ════ -->
+                <div id="esxi-edit-settings-modal" class="esxi-modal-backdrop" style="display:none;">
+                    <div class="esxi-modal" style="width:min(92vw,720px);height:auto;max-height:92vh;">
+                        <div class="esxi-modal-header">
+                            <div><i class="fa-solid fa-gear" style="color:#0095d9;margin-right:8px;"></i>编辑虚拟机配置 - [<span id="esxi-edit-vm-name">—</span>]</div>
+                            <button class="btn-icon" onclick="esxiCloseEditSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <form onsubmit="esxiSubmitEditSettings(event)" style="padding:20px;overflow-y:auto;max-height:calc(92vh - 60px);">
+                            <div id="esxi-edit-running-notice" style="display:none;margin-bottom:14px;background:rgba(0,149,217,0.12);border:1px solid rgba(0,149,217,0.35);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--esxi-text);">
+                                <i class="fa-solid fa-bolt" style="color:#0095d9;margin-right:6px;"></i>
+                                <strong>虚拟机处于运行状态：</strong>系统磁盘支持<strong>即时在线热扩容</strong>；CPU 核心、内存与<strong>网卡直通/桥接配置</strong>已保存至底层配置库，将在虚拟机下次重启后生效。
+                            </div>
+                            <div id="esxi-edit-off-notice" style="display:none;margin-bottom:14px;background:rgba(76,175,80,0.12);border:1px solid rgba(76,175,80,0.35);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--esxi-text);">
+                                <i class="fa-solid fa-power-off" style="color:#4caf50;margin-right:6px;"></i>
+                                <strong>虚拟机已关机：</strong>修改的 CPU 核心、内存、磁盘容量、网络模式等将在保存后立即写入并生效。
+                            </div>
+
+                            <div style="font-size:12px;font-weight:600;color:#0095d9;margin-bottom:10px;border-bottom:1px solid var(--esxi-border);padding-bottom:4px;">
+                                <i class="fa-solid fa-sliders" style="margin-right:6px;"></i>虚拟硬件核心参数 (CPU / 内存 / 磁盘)
+                            </div>
+                            <div class="vm-form-grid">
+                                <label>vCPU 核心数 <span class="ops-tag" style="background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.35); font-size:10px; padding:1px 6px; margin-left:4px;"><i class="fa-solid fa-clock-rotate-left"></i> 重启后生效</span>
+                                    <input class="form-input" id="esxi-edit-cpu" type="number" min="1" max="16" required>
+                                    <span id="esxi-edit-cpu-hint" style="font-size:11px;color:var(--esxi-text-muted);display:block;margin-top:2px;">宿主机总可用: 16 物理线程</span>
+                                </label>
+                                <label>分配内存 (MiB) <span class="ops-tag" style="background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.35); font-size:10px; padding:1px 6px; margin-left:4px;"><i class="fa-solid fa-clock-rotate-left"></i> 重启后生效</span>
+                                    <div style="display:flex;gap:8px;align-items:center;">
+                                        <input class="form-input" id="esxi-edit-ram" type="number" min="512" step="512" required style="flex:1;" oninput="esxiUpdateRamHint()">
+                                        <span id="esxi-edit-ram-hint" style="font-size:12px;color:var(--esxi-text-muted);white-space:nowrap;min-width:60px;">4.0 GiB</span>
+                                    </div>
+                                    <span id="esxi-edit-ram-subhint" style="font-size:11px;color:var(--esxi-text-muted);display:block;margin-top:2px;">系统运行内存</span>
+                                </label>
+                                <label>系统虚拟磁盘容量 (GiB) <span class="ops-tag good" style="font-size:10px; padding:1px 6px; margin-left:4px;"><i class="fa-solid fa-bolt"></i> 在线热扩容 · 立即生效</span>
+                                    <div style="display:flex;gap:8px;align-items:center;">
+                                        <input class="form-input" id="esxi-edit-disk" type="number" min="32" step="1" required style="flex:1;">
+                                        <span style="font-size:12px;color:var(--esxi-text-muted);white-space:nowrap;">GiB</span>
+                                    </div>
+                                    <span style="font-size:11px;color:var(--esxi-text-muted);display:block;margin-top:2px;">当前: <strong id="esxi-edit-disk-curr">32</strong> GiB (支持在线平滑扩容 · 仅增不减)</span>
+                                </label>
+                                <label>随宿主机自启 (Autostart)
+                                    <select class="form-input" id="esxi-edit-autostart">
+                                        <option value="true">开启 (开机随宿主机自启)</option>
+                                        <option value="false">关闭</option>
+                                    </select>
+                                    <span style="font-size:11px;color:var(--esxi-text-muted);display:block;margin-top:2px;">主机断电恢复后自动拉起</span>
+                                </label>
+                            </div>
+
+                            <div id="esxi-edit-passthrough-card" style="margin-top:16px;padding:12px;background:var(--esxi-bg-row-alt);border:1px solid var(--esxi-border);border-radius:6px;display:none;">
+                                <div style="font-size:12px;font-weight:600;color:var(--esxi-text);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+                                    <span id="esxi-edit-passthrough-title"><i class="fa-solid fa-hard-drive" style="color:#0095d9;margin-right:6px;"></i>物理直通数据磁盘</span>
+                                    <span class="esxi-badge" style="background:rgba(0,149,217,0.15);color:#0095d9;font-weight:normal;">物理直通 · 硬件独占</span>
+                                </div>
+                                <div id="esxi-edit-passthrough-list" style="font-size:12px;color:var(--esxi-text);line-height:1.7;">
+                                    <!-- Filled dynamically -->
+                                </div>
+                            </div>
+
+                            <div style="font-size:12px;font-weight:600;color:#0095d9;margin:16px 0 10px 0;border-bottom:1px solid var(--esxi-border);padding-bottom:4px;">
+                                <i class="fa-solid fa-network-wired" style="margin-right:6px;"></i>网络与引导选项
+                            </div>
+                            <div class="vm-form-grid">
+                                <div style="grid-column:1/-1; margin-top:4px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+                                        <span style="font-size:12px; font-weight:600; color:var(--esxi-text);">
+                                            <i class="fa-solid fa-network-wired" style="color:#0095d9; margin-right:6px;"></i>虚拟网卡与物理直通列表 <span class="ops-tag" style="background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.35); font-size:10px; padding:1px 6px; margin-left:4px;"><i class="fa-solid fa-clock-rotate-left"></i> 重启后生效</span>
+                                        </span>
+                                        <div style="display:flex; gap:8px;">
+                                            <button type="button" class="esxi-btn esxi-btn-sm" onclick="esxiApplyRouterTemplateEdit()" style="color:#eab308; border-color:#ca8a04; font-size:11px;">
+                                                <i class="fa-solid fa-wand-magic-sparkles"></i> 软路由拓扑预设 (1桥接管理 + 2物理直通)
+                                            </button>
+                                            <button type="button" class="esxi-btn esxi-btn-sm" onclick="esxiAddEditNicRow()" style="color:#38bdf8; border-color:#0284c7; font-size:11px;">
+                                                <i class="fa-solid fa-plus"></i> 添加网卡/直通接口
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="esxi-edit-nics-container" style="display:flex; flex-direction:column; gap:10px;">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                    <div id="esxi-edit-net-tip" style="margin-top:8px;"></div>
+                                </div>
+                                <div style="grid-column:1/-1;margin-top:2px;text-align:right;">
+                                    <a href="javascript:void(0)" onclick="esxiCloseEditSettingsModal();switchTab('tab-network');" style="color:#0095d9;font-size:11.5px;text-decoration:none;">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i> 在【网络管理】中查看各物理网口状态与拓扑
+                                    </a>
+                                </div>
+                                <label>首选引导设备 <span class="ops-tag" style="font-size:10px; padding:1px 6px; margin-left:4px; opacity:0.85;">重启后生效</span>
+                                    <select class="form-input" id="esxi-edit-boot">
+                                        <option value="hd">系统硬盘优先 (推荐 · 快速启动)</option>
+                                        <option value="cdrom">CD/DVD 光盘优先 (用于系统重装)</option>
+                                    </select>
+                                </label>
+                                <label>安装 ISO 镜像 (CD/DVD 光驱) <span class="ops-tag" style="font-size:10px; padding:1px 6px; margin-left:4px; opacity:0.85;">换盘需关机或重启</span>
+                                    <select class="form-input" id="esxi-edit-iso">
+                                        <option value="">不挂载镜像 (弹出光驱)</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <div class="ops-actions" style="margin-top:20px;justify-content:flex-end;">
+                                <button class="esxi-btn" type="button" onclick="esxiCloseEditSettingsModal()">取消</button>
+                                <button class="esxi-btn esxi-btn-primary" type="submit"><i class="fa-solid fa-check"></i> 保存设置</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ════ Clone VM Modal ════ -->
+                <div id="esxi-clone-vm-modal" class="esxi-modal-backdrop" style="display:none;">
+                    <div class="esxi-modal" style="width:min(90vw,540px);height:auto;">
+                        <div class="esxi-modal-header">
+                            <div><i class="fa-solid fa-copy" style="color:#0095d9;margin-right:8px;"></i>克隆虚拟机 - [<span id="esxi-clone-source-name">—</span>]</div>
+                            <button class="btn-icon" onclick="esxiCloseCloneModal()"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <form onsubmit="esxiSubmitCloneVm(event)" style="padding:20px;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--esxi-text-muted);">新虚拟机名称</label>
+                                <input type="text" id="esxi-clone-new-name" class="form-input" placeholder="例如: my-vm-backup" required pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,47}">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--esxi-text-muted);">目标数据存储 (克隆虚拟磁盘存放位置)</label>
+                                <select id="esxi-clone-datastore" class="form-input"></select>
+                            </div>
+                            <p style="font-size:12px;color:var(--esxi-text-muted);margin:12px 0;">
+                                系统将无缝克隆源虚拟机的系统盘，并自动生成全新的 MAC 地址与 UUID，避免局域网 IP/网络冲突。
+                            </p>
+                            <div class="ops-actions" style="margin-top:16px;justify-content:flex-end;">
+                                <button class="esxi-btn" type="button" onclick="esxiCloseCloneModal()">取消</button>
+                                <button class="esxi-btn esxi-btn-primary" id="esxi-clone-btn" type="submit"><i class="fa-solid fa-check"></i> 开始克隆</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ════ ESXi Datastore Browser Modal ════ -->
+                <div id="esxi-ds-browser-modal" class="esxi-modal-backdrop" style="display:none;">
+                    <div class="esxi-modal">
+                        <div class="esxi-modal-header">
+                            <div><i class="fa-solid fa-folder-open" style="color:#0095d9;margin-right:8px;"></i>存储浏览器 - [<span id="esxi-dsb-title">datastore1</span>]</div>
+                            <button class="btn-icon" onclick="esxiCloseDsBrowser()"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="esxi-browser-toolbar">
+                            <label class="esxi-btn esxi-btn-primary" style="margin:0;cursor:pointer;">
+                                <i class="fa-solid fa-upload"></i> 上传镜像 / 固件包
+                                <input type="file" id="esxi-dsb-file-input" accept=".iso,.img,.gz,.qcow2,.vmdk,.raw" style="display:none;" onchange="esxiHandleDsbUpload(event)">
+                            </label>
+                            <button class="esxi-btn" onclick="esxiRefreshDsBrowser()"><i class="fa-solid fa-rotate"></i> 刷新</button>
+                            <span id="esxi-dsb-upload-status" style="font-size:12px;color:#38bdf8;margin-left:auto;"></span>
+                        </div>
+                        <progress id="esxi-dsb-progress" max="100" value="0" style="width:100%;height:4px;display:none;"></progress>
+                        <div class="esxi-modal-body">
+                            <!-- Left Datastores Tree -->
+                            <div class="esxi-modal-pane-left">
+                                <div style="font-size:11px;font-weight:700;color:var(--esxi-text-muted);margin-bottom:8px;text-transform:uppercase;">数据存储列表</div>
+                                <ul class="esxi-nav-tree" id="esxi-dsb-ds-list">
+                                    <!-- Populated dynamically -->
+                                </ul>
+                            </div>
+                            <!-- Right Files Area -->
+                            <div class="esxi-modal-pane-right">
+                                <div class="esxi-browser-files" id="esxi-dsb-files-table-wrap">
+                                    <table class="esxi-table">
+                                        <thead>
+                                            <tr>
+                                                <th>文件名称</th>
+                                                <th>大小</th>
+                                                <th>类型</th>
+                                                <th>最后修改时间</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="esxi-dsb-files-body">
+                                            <!-- Populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="esxi-modal-footer">
+                            <span id="esxi-dsb-footer-info">就绪</span>
+                            <button class="esxi-btn" onclick="esxiCloseDsBrowser()">关闭</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════ VM Creation Modal ════ -->
+                <div id="esxi-create-vm-modal" class="esxi-modal-backdrop" style="display:none;">
+                    <div class="esxi-modal" style="width:min(90vw,680px);height:auto;max-height:90vh;">
+                        <div class="esxi-modal-header">
+                            <div><i class="fa-solid fa-plus" style="color:#0095d9;margin-right:8px;"></i>新建虚拟机向导</div>
+                            <button class="btn-icon" onclick="esxiCloseCreateModal()"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <form onsubmit="esxiSubmitCreateVm(event)" style="padding:20px;overflow-y:auto;">
+                            <div class="vm-form-grid">
+                                <label>虚拟机名称
+                                    <input class="form-input" id="vm-new-name" required pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,47}" placeholder="例如: ubuntu-server 或 win10">
+                                </label>
+                                <label>目标数据存储 (系统盘存放位置)
+                                    <select class="form-input" id="vm-new-datastore">
+                                        <option value="datastore1">datastore1 (系统 SSD · 剩余 173G)</option>
+                                        <option value="datastore-ssd">datastore-ssd (第二 SSD · 剩余 222G)</option>
+                                        <option value="datastore-raid10" selected>datastore-raid10 (RAID 10 · 剩余 1.7T)</option>
+                                    </select>
+                                </label>
+                                <label>vCPU 核心数
+                                    <input class="form-input" id="vm-new-cpu" type="number" min="1" max="16" value="2" required>
+                                </label>
+                                <label>分配内存 (MiB)
+                                    <input class="form-input" id="vm-new-ram" type="number" min="512" step="256" value="2048" required>
+                                </label>
+                                <label>虚拟磁盘容量 (GiB)
+                                    <input class="form-input" id="vm-new-disk" type="number" min="1" value="32" required>
+                                </label>
+                                <label>安装与引导方式
+                                    <select class="form-input" id="vm-new-install-mode" onchange="vmOnInstallModeChange()">
+                                        <option value="firmware" selected>🚀 固件母盘直接部署 (推荐用于 iStoreOS / OpenWrt 软路由)</option>
+                                        <option value="iso">💿 常规光盘引导安装 (Ubuntu / Windows / 飞牛等 ISO)</option>
+                                        <option value="none">💻 空白系统盘 (暂不挂载安装介质)</option>
+                                    </select>
+                                </label>
+                                <label id="vm-new-firmware-wrap">固件母盘镜像 (iStoreOS / RAW / QCOW2)
+                                    <select class="form-input" id="vm-new-firmware">
+                                        <option value="">请选择固件母盘…</option>
+                                    </select>
+                                </label>
+                                <label id="vm-new-iso-wrap" style="display:none;">安装 ISO 镜像 (虚拟光驱)
+                                    <select class="form-input" id="vm-new-iso">
+                                        <option value="">不挂载镜像</option>
+                                    </select>
+                                </label>
+                                <label>固件引导模式
+                                    <select class="form-input" id="vm-new-firmware-boot">
+                                        <option value="bios" selected>BIOS 兼容模式 (推荐 · 兼容 iStoreOS combined 及多数镜像)</option>
+                                        <option value="uefi">UEFI 模式 (OVMF · 适用于 iStoreOS combined-efi)</option>
+                                    </select>
+                                </label>
+                                <div id="vm-new-firmware-tip" style="grid-column:1 / -1; background:rgba(0,149,217,0.08); border:1px solid rgba(0,149,217,0.3); border-radius:6px; padding:10px 14px; font-size:12px; color:var(--esxi-text);">
+                                    <div style="font-weight:700; color:#38bdf8; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                                        <i class="fa-solid fa-bolt"></i>
+                                        <span>iStoreOS / 软路由母盘极速部署机制</span>
+                                    </div>
+                                    <div style="font-size:11.5px; line-height:1.6; color:var(--esxi-text-muted);">
+                                        • <b>母盘克隆与自动扩容：</b>选中的 iStoreOS 固件将直接转化为虚拟机系统盘，并自动扩容至上方指定的磁盘容量（如 16G/32G），免除手动安装步骤。<br>
+                                        • <b>开机即用：</b>虚拟机首次开机即可直接引导并进入 iStoreOS 系统，免去光盘安装向导。
+                                    </div>
+                                </div>
+                                </div>
+                                <div style="margin-top:14px; border-top:1px solid var(--esxi-border); padding-top:12px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+                                        <span style="font-size:12px; font-weight:700; color:#0095d9;">
+                                            <i class="fa-solid fa-network-wired" style="margin-right:6px;"></i>网络接口配置 (支持同时直通多个独立物理网口)
+                                        </span>
+                                        <div style="display:flex; gap:8px;">
+                                            <button type="button" class="esxi-btn esxi-btn-sm" onclick="vmApplyRouterTemplate()" style="color:#eab308; border-color:#ca8a04; font-size:11px;">
+                                                <i class="fa-solid fa-wand-magic-sparkles"></i> 软路由拓扑预设 (1桥接管理 + 2物理直通)
+                                            </button>
+                                            <button type="button" class="esxi-btn esxi-btn-sm" onclick="vmAddCreateNicRow()" style="color:#38bdf8; border-color:#0284c7; font-size:11px;">
+                                                <i class="fa-solid fa-plus"></i> 添加网卡接口
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="vm-new-nics-container" style="display:flex; flex-direction:column; gap:10px;">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                    <div id="vm-new-net-tip" style="margin-top:10px;"></div>
+                            <div class="ops-actions" style="margin-top:20px;justify-content:flex-end;">
+                                <button class="esxi-btn" type="button" onclick="esxiCloseCreateModal()">取消</button>
+                                <button class="esxi-btn esxi-btn-primary" id="vm-create-button" type="submit"><i class="fa-solid fa-check"></i> 完成并创建</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ════ CD/ISO Mount Dialog ════ -->
+                <dialog id="vm-media-dialog" class="vm-dialog">
+                    <form onsubmit="vmMountSubmit(event)">
+                        <h3>挂载 / 更换安装镜像</h3>
+                        <p class="ops-muted">选择已关机的虚拟机。挂载后启动，双击虚拟机或点击控制台进行安装。</p>
+                        <label>目标虚拟机
+                            <select id="vm-mount-target" class="form-input" required></select>
+                        </label>
+                        <label>镜像文件 (支持跨数据存储)
+                            <select id="vm-mount-iso" class="form-input"></select>
+                        </label>
+                        <div class="ops-actions">
+                            <button class="esxi-btn esxi-btn-primary" id="vm-mount-submit" type="submit">应用光驱设置</button>
+                            <button class="esxi-btn" type="button" onclick="document.getElementById('vm-media-dialog').close()">取消</button>
+                        </div>
+                    </form>
+                </dialog>
+
+                <!-- ════ Remote Web Console Modal ════ -->
+                <div id="vm-console-modal" hidden style="position:fixed;inset:25px;z-index:999999;background:#101820;border:1px solid #3d5466;border-radius:8px;box-shadow:0 0 0 100vw rgba(0,0,0,0.75);flex-direction:column;">
+                    <div style="padding:10px 16px;background:#1a2832;border-bottom:1px solid #2d4252;display:flex;justify-content:space-between;align-items:center;color:#fff;font-size:13px;">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <strong id="vm-console-vm-name" style="font-size:14px;color:#38bdf8;">虚拟机控制台</strong>
+                            <span id="vm-console-status"><i class="fa-solid fa-spinner fa-spin" style="color:#0095d9;margin-right:6px;"></i>正在连接控制台…</span>
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <button class="esxi-btn esxi-btn-sm" onclick="vmRfb?.sendCtrlAltDel()"><i class="fa-solid fa-keyboard"></i> Ctrl+Alt+Del</button>
+                            <button class="esxi-btn esxi-btn-sm" onclick="vmReconnectConsole()"><i class="fa-solid fa-rotate-right"></i> 重新连接</button>
+                            <button class="esxi-btn esxi-btn-sm" onclick="vmCloseConsole()"><i class="fa-solid fa-xmark"></i> 关闭控制台</button>
+                        </div>
+                    </div>
+                    <div id="vm-console-screen" style="flex:1;min-height:0;width:100%;height:100%;overflow:hidden;background:#000;"></div>
+                </div>
+            </section>
+
+    <!-- ═══════════════ MODAL: 新建 CT 容器向导 (PVE 风格) ═══════════════ -->
+                    <!-- ═══════════════ MODAL: CT 镜像模板管理 (macOS 优雅卡片风格) ═══════════════ -->
+    <div id="vm-ct-template-modal" class="esxi-modal-backdrop" style="display:none;">
+        <div class="esxi-modal" style="width:min(94vw,880px);height:auto;max-height:88vh;display:flex;flex-direction:column;">
+            <div class="esxi-modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="width:34px;height:34px;background:linear-gradient(135deg,#00c0ef 0%,#0077ed 100%);color:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 3px 10px rgba(0,119,237,0.32);">
+                        <i class="fa-solid fa-box-archive"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;font-size:15px;color:var(--esxi-text-bright);line-height:1.2;">CT 容器镜像模板库</div>
+                        <div style="font-size:11.5px;color:var(--esxi-text-muted);margin-top:2px;">Proxmox VE 官方标准 LXC 模板 · 中科大 USTC 镜像源国内高速直连</div>
+                    </div>
+                </div>
+                <button class="btn-icon" onclick="vmCloseCtTemplateModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div style="flex:1;overflow-y:auto;padding:18px 22px;min-height:0;">
+                <!-- Top Config Bar: Mirror & Storage Target -->
+                <div class="mac-grouped-card" style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1.3fr;gap:16px;">
+                    <div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <label class="mac-label" style="margin:0;">
+                                <i class="fa-solid fa-globe" style="color:#0077ed;margin-right:4px;"></i> 下载镜像源 (Mirror)
+                            </label>
+                            <span class="ops-tag good" style="font-size:10px;padding:1px 6px;">国内直连 · 免代理</span>
+                        </div>
+                        <select id="ct-tmpl-mirror-select" class="mac-select">
+                            <option value="ustc" selected>中科大源 (USTC Mirror · 国内极速推荐)</option>
+                            <option value="tsinghua">清华大学源 (TUNA Mirror)</option>
+                            <option value="official">Proxmox 官方源 (Global)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <label class="mac-label" style="margin:0;">
+                                <i class="fa-solid fa-database" style="color:#00c0ef;margin-right:4px;"></i> 下载存放数据存储 (Target Storage)
+                            </label>
+                            <span style="font-size:10.5px;color:var(--esxi-text-muted);">自动检索</span>
+                        </div>
+                        <select id="ct-tmpl-storage-select" class="mac-select">
+                            <option value="/mnt/raid10/template/cache" selected>datastore-raid10 [/mnt/raid10/template/cache · 剩余 1.5 TB]</option>
+                            <option value="/mnt/vadata/template/cache">datastore-ssd [/mnt/vadata/template/cache · 剩余 207 GB]</option>
+                            <option value="/var/lib/vz/template/cache">datastore1 [/var/lib/vz/template/cache · 剩余 170 GB]</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Active Download Card with Live Metrics -->
+                <div id="ct-tmpl-download-card" style="display:none;background:rgba(0,113,227,0.06);border:1px solid rgba(0,113,227,0.25);border-radius:10px;padding:14px 18px;margin-bottom:14px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                        <div style="font-weight:700;color:#0077ed;font-size:13px;display:flex;align-items:center;gap:8px;">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            <span id="ct-tmpl-dl-title">正在从中科大源拉取 CT 模板...</span>
+                        </div>
+                        <div style="display:flex;gap:12px;align-items:center;">
+                            <span id="ct-tmpl-dl-bytes" style="font-size:12px;font-weight:600;">0 MB / 0 MB</span>
+                            <span id="ct-tmpl-dl-speed" style="font-size:12px;color:#22c55e;font-weight:700;"><i class="fa-solid fa-bolt"></i> 0 KB/s</span>
+                            <span id="ct-tmpl-dl-percent" style="font-size:13px;color:#0077ed;font-weight:700;">0%</span>
+                        </div>
+                    </div>
+                    <div class="esxi-nav-gauge-bg" style="height:8px;background:rgba(0,0,0,0.06);border-radius:4px;overflow:hidden;margin-bottom:6px;">
+                        <div id="ct-tmpl-dl-fill" class="esxi-nav-gauge-fill" style="width:0%;background:linear-gradient(90deg, #0077ed, #00c0ef);height:100%;transition:width 0.3s ease;"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--esxi-text-muted);">
+                        <span id="ct-tmpl-dl-path">目标存储目录: /mnt/raid10/template/cache</span>
+                        <span style="color:#0077ed;"><i class="fa-solid fa-circle-check"></i> 任务已在屏幕下方【近期任务】实时同步展示，关闭此窗口后台依然继续下载</span>
+                    </div>
+                </div>
+
+                <!-- Tabs & Search Toolbar -->
+                <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,0,0,0.08);padding-bottom:10px;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:8px;">
+                        <button class="mac-btn ct-tmpl-tab-btn active" data-tab="online" onclick="switchCtTemplateTab('online')">
+                            <i class="fa-solid fa-cloud-arrow-down" style="color:#0077ed;"></i> 中科大镜像源 (在线下载)
+                        </button>
+                        <button class="mac-btn ct-tmpl-tab-btn" data-tab="local" onclick="switchCtTemplateTab('local')">
+                            <i class="fa-solid fa-hard-drive" style="color:#22c55e;"></i> 本地已下载模板 (<span id="ct-tmpl-local-count">0</span>)
+                        </button>
+                    </div>
+
+                    <div style="position:relative;min-width:240px;flex:1;max-width:320px;" id="ct-tmpl-search-wrap">
+                        <i class="fa-solid fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--esxi-text-muted);font-size:11.5px;"></i>
+                        <input type="text" id="ct-tmpl-search-input" class="mac-input" placeholder="筛选模板名称或发行版..." oninput="vmFilterCtTemplates()" style="padding-left:28px;">
+                    </div>
+                </div>
+
+                <!-- Quick OS Category Tags (Online tab only) -->
+                <div id="ct-tmpl-os-tags" style="display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+                    <span style="font-size:11px;color:var(--esxi-text-muted);margin-right:4px;">分类筛选:</span>
+                    <button type="button" class="ct-tag-pill active" data-os="all" onclick="vmFilterCtByOs('all')">全部模板</button>
+                    <button type="button" class="ct-tag-pill" data-os="alpine" onclick="vmFilterCtByOs('alpine')">Alpine</button>
+                    <button type="button" class="ct-tag-pill" data-os="debian" onclick="vmFilterCtByOs('debian')">Debian</button>
+                    <button type="button" class="ct-tag-pill" data-os="ubuntu" onclick="vmFilterCtByOs('ubuntu')">Ubuntu</button>
+                    <button type="button" class="ct-tag-pill" data-os="rhel" onclick="vmFilterCtByOs('rhel')">CentOS/Alma</button>
+                    <button type="button" class="ct-tag-pill" data-os="arch" onclick="vmFilterCtByOs('arch')">Arch</button>
+                </div>
+
+                <!-- Tab Panels -->
+                <div id="ct-tmpl-panel-online">
+                    <div id="ct-tmpl-online-list" style="max-height:380px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:8px;">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+
+                <div id="ct-tmpl-panel-local" style="display:none;">
+                    <div id="ct-tmpl-local-list" style="max-height:380px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:8px;">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="esxi-modal-footer">
+                <button type="button" class="mac-btn" onclick="vmCloseCtTemplateModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ MODAL: 新建 CT 容器向导 (macOS 优雅卡片风格) ═══════════════ -->
+    <div id="vm-create-ct-modal" class="esxi-modal-backdrop" style="display:none;">
+        <div class="esxi-modal" style="width:min(90vw,640px);height:auto;max-height:88vh;display:flex;flex-direction:column;">
+            <div class="esxi-modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="width:34px;height:34px;background:linear-gradient(135deg,#00c0ef 0%,#0077ed 100%);color:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 3px 10px rgba(0,119,237,0.32);">
+                        <i class="fa-solid fa-cube"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;font-size:15px;color:var(--esxi-text-bright);line-height:1.2;">新建 CT 容器向导</div>
+                        <div style="font-size:11.5px;color:var(--esxi-text-muted);margin-top:2px;">Proxmox VE 经典架构 · 共享宿主机 Linux 内核 · 秒级极速启动</div>
+                    </div>
+                </div>
+                <button class="btn-icon" onclick="vmCloseCreateCtModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div style="flex:1;overflow-y:auto;padding:18px 22px;min-height:0;">
+                <form id="vm-create-ct-form" onsubmit="vmSubmitCreateCt(event)">
+                    <!-- Basic Info -->
+                    <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:14px;margin-bottom:14px;">
+                        <div>
+                            <label class="mac-label">容器编号 (VMID) *</label>
+                            <input type="number" id="ct-create-vmid" class="mac-input" required min="100" max="999" placeholder="100">
+                        </div>
+                        <div>
+                            <label class="mac-label">容器主机名 (Hostname) *</label>
+                            <input type="text" id="ct-create-name" class="mac-input" required placeholder="如 ct-100">
+                        </div>
+                    </div>
+
+                    <!-- Template Selection Box (macOS Inset Grouped) -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <label class="mac-label" style="margin:0;">
+                                <i class="fa-solid fa-box-archive" style="color:#0077ed;margin-right:4px;"></i> 选择本地 CT 镜像模板 (已下载) *
+                            </label>
+                            <a href="javascript:void(0)" onclick="vmOpenCtTemplateModal()" style="font-size:11.5px;color:#0071e3;text-decoration:none;display:flex;align-items:center;gap:4px;font-weight:500;">
+                                <i class="fa-solid fa-cloud-arrow-down"></i> 打开模板库 (中科大源一键拉取)
+                            </a>
+                        </div>
+                        <select id="ct-create-template-select" class="mac-select" required onchange="vmOnCreateTemplateChanged()">
+                            <option value="">(请先选择本地已下载模板)</option>
+                        </select>
+                        <div id="ct-selected-tmpl-preview" style="margin-top:8px;padding:8px 12px;background:rgba(0,113,227,0.06);border:1px solid rgba(0,113,227,0.18);border-radius:6px;display:none;font-size:12px;">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- Storage Target -->
+                    <div style="margin-bottom:14px;">
+                        <label class="mac-label">容器存放数据存储 (Storage Target) *</label>
+                        <select id="ct-create-storage" class="mac-select">
+                            <option value="/mnt/vadata/lxc-containers" selected>datastore-ssd [/mnt/vadata/lxc-containers · 高速 SSD 专用池 · 剩余 206 GB (推荐)]</option>
+                            <option value="/mnt/raid10/lxc-containers">datastore-raid10 [/mnt/raid10/lxc-containers · RAID10 大容量 · 剩余 1.5 TB]</option>
+                            <option value="/var/lib/lxc">datastore1 [/var/lib/lxc · 系统根目录 · 剩余 170 GB]</option>
+                        </select>
+                    </div>
+
+                    <!-- Resource Limits -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                        <div>
+                            <label class="mac-label">CPU 核心数限制</label>
+                            <select id="ct-create-cores" class="mac-select">
+                                <option value="1" selected>1 核心</option>
+                                <option value="2">2 核心</option>
+                                <option value="4">4 核心</option>
+                                <option value="8">8 核心</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mac-label">内存配额</label>
+                            <select id="ct-create-ram" class="mac-select">
+                                <option value="256">256 MiB</option>
+                                <option value="512" selected>512 MiB (标准)</option>
+                                <option value="1024">1024 MiB (1 GiB)</option>
+                                <option value="2048">2048 MiB (2 GiB)</option>
+                                <option value="4096">4096 MiB (4 GiB)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Networking & Multi-NIC Passthrough -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;background:rgba(255,255,255,0.02);padding:12px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                            <div style="font-size:12px;font-weight:600;color:#94a3b8;display:flex;align-items:center;gap:6px;">
+                                <i class="fa-solid fa-network-wired" style="color:#0ea5e9;"></i> 网络适配器 (支持多网卡与物理业务口直通)
+                            </div>
+                            <button type="button" class="mac-btn mac-btn-sm" onclick="ctAddCreateNic()" style="font-size:11px;padding:3px 8px;border-color:#0ea5e9;color:#38bdf8;">
+                                <i class="fa-solid fa-plus"></i> 添加网卡
+                            </button>
+                        </div>
+                        <div id="ct-create-nics-container" style="display:flex;flex-direction:column;gap:10px;">
+                            <!-- Dynamically populated NIC cards -->
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;">
+                            <div>
+                                <label class="mac-label">eth0 静态 IP (可选，如 192.168.1.102/24，留空为 DHCP)</label>
+                                <input type="text" id="ct-create-ip" class="mac-input" placeholder="留空为 DHCP" style="font-family:monospace;font-size:12px;">
+                            </div>
+                            <div>
+                                <label class="mac-label">默认网关 (Gateway)</label>
+                                <input type="text" id="ct-create-gateway" class="mac-input" value="192.168.1.1" placeholder="192.168.1.1" style="font-family:monospace;font-size:12px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:16px;">
+                        <label class="mac-label">Root 管理员密码</label>
+                        <input type="text" id="ct-create-password" class="mac-input" value="root123" placeholder="容器 root 密码" autocomplete="new-password">
+                    </div>
+
+                    <div class="esxi-modal-footer" style="padding:14px 0 0 0;margin-top:6px;">
+                        <button type="button" class="mac-btn" onclick="vmCloseCreateCtModal()">取消</button>
+                        <button type="submit" class="mac-btn mac-btn-primary" id="ct-create-submit-btn"><i class="fa-solid fa-check"></i> 立即创建并配置</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- CT Web Console Modal (macOS Elegant Style) -->
+    <div id="vm-ct-console-modal" class="esxi-modal-backdrop" style="display:none;" onclick="if(event.target===this)vmCloseCtConsole();">
+        <div class="mac-modal" id="ct-console-window" style="width:880px;max-width:96vw;display:flex;flex-direction:column;height:560px;max-height:88vh;padding:0;overflow:hidden;border-radius:12px;">
+            <!-- macOS Window Title Bar -->
+            <div class="mac-modal-head" style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="display:flex;gap:7px;align-items:center;">
+                        <span onclick="vmCloseCtConsole()" style="width:12px;height:12px;border-radius:50%;background:#ff5f56;display:inline-block;cursor:pointer;" title="关闭控制台"></span>
+                        <span onclick="ctConsoleClear()" style="width:12px;height:12px;border-radius:50%;background:#ffbd2e;display:inline-block;cursor:pointer;" title="清屏"></span>
+                        <span onclick="ctConsoleToggleExpand()" style="width:12px;height:12px;border-radius:50%;background:#27c93f;display:inline-block;cursor:pointer;" title="缩放/全屏"></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#f4f4f5;">
+                        <i class="fa-solid fa-cube" style="color:#0071e3;"></i>
+                        <span id="ct-console-title">容器控制台</span>
+                        <span id="ct-console-badge" class="ops-tag good" style="font-size:11px;padding:2px 8px;">运行中</span>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span id="ct-console-meta" style="font-size:11px;color:#a1a1aa;font-family:ui-monospace,Menlo,monospace;"></span>
+                    <button type="button" class="mac-btn" style="padding:4px 10px;font-size:11px;background:rgba(255,255,255,0.08);color:#e4e4e7;border:none;border-radius:6px;cursor:pointer;" onclick="vmCloseCtConsole()"><i class="fa-solid fa-xmark"></i> 关闭</button>
+                </div>
+            </div>
+
+            <!-- Quick Command Toolbar -->
+            <div style="background:#141416;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+                <span style="color:#71717a;font-size:11px;font-weight:500;">快捷运维:</span>
+                <button type="button" class="ct-quick-cmd-btn" onclick="ctConsoleRunCmd('ip addr show')"><i class="fa-solid fa-network-wired"></i> 网络 (ip a)</button>
+                <button type="button" class="ct-quick-cmd-btn" onclick="ctConsoleRunCmd('df -h')"><i class="fa-solid fa-hard-drive"></i> 磁盘 (df -h)</button>
+                <button type="button" class="ct-quick-cmd-btn" onclick="ctConsoleRunCmd('uptime')"><i class="fa-solid fa-gauge"></i> 负载 (uptime)</button>
+                <button type="button" class="ct-quick-cmd-btn" onclick="ctConsoleRunCmd('ps aux | head -n 15')"><i class="fa-solid fa-list-check"></i> 进程 (ps)</button>
+                <button type="button" class="ct-quick-cmd-btn" onclick="ctConsoleRunCmd('cat /etc/os-release | head -n 6')"><i class="fa-brands fa-linux"></i> 系统信息</button>
+                <div style="flex:1;"></div>
+                <button type="button" class="ct-quick-cmd-btn" onclick="ctConsoleClear()"><i class="fa-solid fa-eraser"></i> 清屏</button>
+            </div>
+
+            <!-- Terminal Output Area -->
+            <div id="ct-console-output" style="flex:1;min-height:280px;background:#09090b;color:#a6e22e;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.55;padding:14px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;user-select:text;">
+            </div>
+
+            <!-- Command Input Form -->
+            <form id="ct-console-form" onsubmit="ctConsoleOnSubmit(event)" style="background:#141416;padding:10px 14px;border-top:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:8px;">
+                <span id="ct-console-prompt" style="color:#38bdf8;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600;white-space:nowrap;user-select:none;">root@container:~#</span>
+                <input type="text" id="ct-console-input" class="mac-input" placeholder="输入命令并回车执行 (支持上下键切换历史记录)..." autocomplete="off" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;padding:6px 10px;border-radius:6px;">
+                <button type="submit" id="ct-console-send-btn" class="mac-btn mac-btn-primary" style="padding:6px 14px;font-size:12px;border-radius:6px;cursor:pointer;"><i class="fa-solid fa-paper-plane"></i> 执行</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ═══════════════ MODAL: 编辑 CT 容器硬件配置 (macOS 风格) ═══════════════ -->
+    <div id="vm-ct-edit-modal" class="esxi-modal-backdrop" style="display:none;" onclick="if(event.target===this)ctCloseEditSettingsModal();">
+        <div class="mac-modal" style="width:min(92vw,680px);height:auto;max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:0;overflow:hidden;">
+            <!-- Header -->
+            <div class="mac-modal-head" style="padding:12px 18px;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="display:flex;gap:7px;align-items:center;">
+                        <span onclick="ctCloseEditSettingsModal()" style="width:12px;height:12px;border-radius:50%;background:#ff5f56;display:inline-block;cursor:pointer;" title="关闭"></span>
+                        <span style="width:12px;height:12px;border-radius:50%;background:#ffbd2e;display:inline-block;"></span>
+                        <span style="width:12px;height:12px;border-radius:50%;background:#27c93f;display:inline-block;"></span>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;font-size:14px;color:var(--mac-modal-text);line-height:1.2;display:flex;align-items:center;gap:8px;">
+                            <i class="fa-solid fa-sliders" style="color:#0ea5e9;"></i>
+                            <span id="ct-edit-modal-title">编辑 CT 容器配置</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-icon" onclick="ctCloseEditSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Form Content -->
+            <div style="flex:1;overflow-y:auto;padding:18px 22px;min-height:0;">
+                <form id="vm-ct-edit-form" onsubmit="ctSubmitEditSettings(event)">
+                    <input type="hidden" id="ct-edit-name">
+
+                    <!-- Basic Hostname & Autostart -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;">
+                        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                            <i class="fa-solid fa-cube" style="color:#0ea5e9;"></i> 基本信息与开机自启
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                            <div>
+                                <label class="mac-label">容器主机名 (Hostname)</label>
+                                <input type="text" id="ct-edit-hostname" class="mac-input" placeholder="如 ct-100" required>
+                            </div>
+                            <div>
+                                <label class="mac-label">开机自启动</label>
+                                <select id="ct-edit-autostart" class="mac-select">
+                                    <option value="true">已启用 (随宿主机开机启动)</option>
+                                    <option value="false">已禁用 (仅手动启动)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CPU & Memory Limits -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;">
+                        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                            <i class="fa-solid fa-microchip" style="color:#0ea5e9;"></i> 计算与内存配额 (支持在线热更新)
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px;">
+                            <div>
+                                <label class="mac-label">CPU 核心数限制</label>
+                                <select id="ct-edit-cores" class="mac-select">
+                                    <option value="1">1 核心 (CPU 0)</option>
+                                    <option value="2">2 核心 (CPU 0-1)</option>
+                                    <option value="4">4 核心 (CPU 0-3)</option>
+                                    <option value="8">8 核心 (CPU 0-7)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mac-label">内存配额限制</label>
+                                <select id="ct-edit-ram" class="mac-select">
+                                    <option value="256">256 MiB</option>
+                                    <option value="512">512 MiB (标准)</option>
+                                    <option value="1024">1024 MiB (1 GiB)</option>
+                                    <option value="2048">2048 MiB (2 GiB)</option>
+                                    <option value="4096">4096 MiB (4 GiB)</option>
+                                    <option value="8192">8192 MiB (8 GiB)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="font-size:11px;color:#22c55e;margin-top:4px;">
+                            <i class="fa-solid fa-bolt"></i> cgroups v2 核心特性：运行中的容器修改 CPU 和内存时将在线即时热生效，无需重启！
+                        </div>
+                    </div>
+
+                    <!-- Network Configuration (Multi-NIC Support) -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                            <div style="font-size:12px;font-weight:600;color:#94a3b8;display:flex;align-items:center;gap:6px;">
+                                <i class="fa-solid fa-network-wired" style="color:#0ea5e9;"></i> 网络适配器 (支持多网卡与物理业务口直通)
+                            </div>
+                            <button type="button" class="mac-btn mac-btn-sm" onclick="ctAddEditNic()" style="font-size:11px;padding:3px 8px;border-color:#0ea5e9;color:#38bdf8;">
+                                <i class="fa-solid fa-plus"></i> 添加网络适配器
+                            </button>
+                        </div>
+                        <div id="ct-edit-nics-container" style="display:flex;flex-direction:column;gap:10px;">
+                            <!-- Dynamically populated NIC cards -->
+                        </div>
+                        <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.1);">
+                            <div style="font-size:11px;font-weight:600;color:#38bdf8;margin-bottom:6px;">
+                                <i class="fa-solid fa-sliders"></i> eth0 主管理口 IP 设置（用于局域网监控、SSH、Web）
+                            </div>
+                            <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:6px;">
+                                <div>
+                                    <label class="mac-label">静态 IPv4 地址 (CIDR) / DHCP</label>
+                                    <input type="text" id="ct-edit-ip" class="mac-input" placeholder="如 192.168.1.100/24 (填 dhcp 为自动)" style="font-family:monospace;font-size:12px;">
+                                </div>
+                                <div>
+                                    <label class="mac-label">默认网关 (Gateway)</label>
+                                    <input type="text" id="ct-edit-gateway" class="mac-input" placeholder="如 192.168.1.1" style="font-family:monospace;font-size:12px;">
+                                </div>
+                            </div>
+                            <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
+                                <i class="fa-solid fa-circle-info"></i> 说明：第 1 张网卡 (eth0) 推荐作为 1 网段管理口，用于局域网监控与 SSH；直通的物理业务网口（如 eth1、eth2 等）作为纯硬件端口直通给容器，插入网线后即可在 iStoreOS、软路由或业务系统中配置使用。
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Root Password & SSH Access -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;">
+                        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                            <i class="fa-solid fa-key" style="color:#0ea5e9;"></i> Root 登录密码与 SSH 访问
+                        </div>
+                        <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:4px;">
+                            <div>
+                                <label class="mac-label">重置 Root 登录密码</label>
+                                <input type="password" id="ct-edit-password" class="mac-input" placeholder="留空则保持现有密码不变" autocomplete="new-password">
+                            </div>
+                            <div style="font-size:11.5px;color:rgba(255,255,255,0.6);display:flex;align-items:center;line-height:1.5;">
+                                <span><i class="fa-solid fa-shield-halved" style="color:#22c55e;margin-right:4px;"></i>已开启 PermitRootLogin，支持 root 密码直连 SSH。</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rootfs & Storage Info (Read-only) -->
+                    <div class="mac-grouped-card" style="margin-bottom:14px;background:rgba(255,255,255,0.02);">
+                        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                            <i class="fa-solid fa-database" style="color:#0ea5e9;"></i> 存储与根文件系统 (只读信息)
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;">
+                            <div style="display:flex;justify-content:space-between;">
+                                <span style="color:#a1a1aa;">根文件系统目录:</span>
+                                <span id="ct-edit-rootfs" style="font-family:monospace;color:#38bdf8;">-</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;">
+                                <span style="color:#a1a1aa;">所在数据存储池:</span>
+                                <span id="ct-edit-datastore" class="ops-tag good">-</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;">
+                                <span style="color:#a1a1aa;">系统发行版模板:</span>
+                                <span id="ct-edit-os" style="color:#e4e4e7;">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="esxi-modal-footer" style="padding:14px 0 0 0;margin-top:6px;">
+                        <button type="button" class="mac-btn" onclick="ctCloseEditSettingsModal()">取消</button>
+                        <button type="submit" class="mac-btn mac-btn-primary" id="ct-edit-submit-btn"><i class="fa-solid fa-check"></i> 保存并应用配置</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+

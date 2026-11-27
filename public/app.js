@@ -6,6 +6,8 @@
 
 // ── Tab definitions (Clean labels without numbers) ───────────────────────────
 const TAB_META = {
+    'tab-vms': {title:'虚拟机管理',subtitle:'Ubuntu KVM · 创建、运行与网页控制台'},
+    'tab-server-power': {title:'服务器电源管理',subtitle:'PSU 状态 · 主板电源遥测 · 整机电源控制'},
     'tab-system':   { title: '系统信息',   subtitle: '硬件参数、核心负载与运行时间概览' },
     'tab-logs':     { title: '系统日志',   subtitle: '实时 Journal / Dmesg / Auth 日志' },
     'tab-docker':   { title: 'Docker 看板', subtitle: '容器生命周期、镜像与资源管理' },
@@ -240,13 +242,15 @@ function switchTab(tabId) {
     if (tabId === 'tab-system')   { fetchSystemInfo(); fetchSources(); fetchResourceMonitor(); fetchFansData(); }
     if (tabId === 'tab-logs')     { fetchLogs(); fetchServices(); fetchPorts(); }
     if (tabId === 'tab-docker')   { fetchDockerOverview(); fetchDockerContainers(); fetchDockerImages(); }
-    if (tabId === 'tab-network')  { fetchNetwork(); fetchSnmpStatus(); fetchRoutes(); fetchNatRules(); fetchVpnStatus(); }
+    if (tabId === 'tab-network')  { fetchNetwork(true); fetchSnmpStatus(); fetchRoutes(); fetchNatRules(); fetchVpnStatus(); }
     if (tabId === 'tab-lanscan')  fetchLanScan();
     if (tabId === 'tab-storage')  { fetchStorage(); fetchPhysicalDisks(); fetchRaids(); fetchSharingStatus(); if(!diskStatsInterval) diskStatsInterval = setInterval(fetchDiskStats, 2000); } else { clearInterval(diskStatsInterval); diskStatsInterval = null; }
     if (tabId === 'tab-sharing') fetchSharingStatus();
     if (tabId === 'tab-firewall') fetchFirewallStatus();
     if (tabId === 'tab-push')     fetchPushConfig();
     if (tabId === 'tab-serial')   fetchSerialPorts();
+    if (tabId === 'tab-vms') fetchVMs();
+    if (tabId === 'tab-server-power') fetchServerPower(true);
     if (tabId === 'tab-ups')      fetchUpsStatus();
     if (tabId === 'tab-speedtest') fetchSpeedtestInfo();
     if (tabId === 'tab-cluster')  { fetchClusterStats(); fetchClusterServers(); }
@@ -266,33 +270,81 @@ function bindGlobalControls() {
 
 function bindThemeToggle() {
     const btn = document.getElementById('btn-theme-toggle');
-    const savedTheme = localStorage.getItem('admin-ui-theme') || 'theme-dark';
-    document.body.className = savedTheme;
-    btn.textContent = savedTheme === 'theme-light' ? '🌙 深色模式' : '☀️ 浅色模式';
+    if (!btn) return;
+
+    let themeMode = localStorage.getItem('admin-ui-theme-mode');
+    if (!themeMode) {
+        // Migration from legacy setting or default to auto
+        const legacy = localStorage.getItem('admin-ui-theme');
+        if (legacy === 'theme-light') themeMode = 'light';
+        else if (legacy === 'theme-dark') themeMode = 'dark';
+        else themeMode = 'auto'; // Default: Follow System
+    }
+
+    const mql = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function applyTheme() {
+        let isDark = true;
+        if (themeMode === 'auto') {
+            isDark = mql ? mql.matches : false;
+            document.body.className = isDark ? 'theme-dark' : 'theme-light';
+            btn.innerHTML = `<i class="fa-solid fa-desktop" style="margin-right:5px;"></i>跟随系统 (${isDark ? '深色' : '浅色'})`;
+            btn.title = '当前跟随操作系统外观，点击切换为浅色模式';
+        } else if (themeMode === 'light') {
+            document.body.className = 'theme-light';
+            btn.innerHTML = `<i class="fa-solid fa-sun" style="color:#f59e0b;margin-right:5px;"></i>浅色模式`;
+            btn.title = '固定浅色模式，点击切换为深色模式';
+        } else {
+            document.body.className = 'theme-dark';
+            btn.innerHTML = `<i class="fa-solid fa-moon" style="color:#38bdf8;margin-right:5px;"></i>深色模式`;
+            btn.title = '固定深色模式，点击切换为跟随系统';
+        }
+        localStorage.setItem('admin-ui-theme-mode', themeMode);
+        localStorage.setItem('admin-ui-theme', document.body.className);
+    }
+
+    if (mql) {
+        // Listen to OS theme changes live
+        try {
+            mql.addEventListener('change', () => {
+                if (themeMode === 'auto') applyTheme();
+            });
+        } catch (e) {
+            mql.addListener && mql.addListener(() => {
+                if (themeMode === 'auto') applyTheme();
+            });
+        }
+    }
 
     btn.addEventListener('click', () => {
-        if (document.body.classList.contains('theme-light')) {
-            document.body.className = 'theme-dark';
-            btn.textContent = '☀️ 浅色模式';
-            localStorage.setItem('admin-ui-theme', 'theme-dark');
+        if (themeMode === 'auto') {
+            themeMode = 'light';
+        } else if (themeMode === 'light') {
+            themeMode = 'dark';
         } else {
-            document.body.className = 'theme-light';
-            btn.textContent = '🌙 深色模式';
-            localStorage.setItem('admin-ui-theme', 'theme-light');
+            themeMode = 'auto';
         }
+        applyTheme();
     });
+
+    applyTheme();
 }
 
 function startAutoRefresh() {
     stopAutoRefresh();
-    autoRefreshTimer = setInterval(() => {
+        autoRefreshTimer = setInterval(() => {
+        // Master Safeguard: Pause any background auto-refresh while any modal is open or user is typing
+        if (document.querySelector('.esxi-modal-backdrop:not([style*="display: none"]):not([style*="display:none"]), .modal-overlay.show, .modal-backdrop.show, .modal-overlay[style*="flex"]')) {
+            return;
+        }
         if (activeTab === 'tab-system')   { fetchSystemInfo(); fetchResourceMonitor(); fetchFansData(); }
         if (activeTab === 'tab-network')  fetchNetwork();
+        if (activeTab === 'tab-server-power') fetchServerPower();
         if (activeTab === 'tab-ups')      { fetchUpsStatus(); const p = document.querySelector('.ups-subpanel.active'); if (p && p.id === 'ups-sub-charts') fetchUpsCharts(); }
         if (activeTab === 'tab-cluster')  { fetchClusterStats(); fetchClusterServers(); }
         if (activeTab === 'tab-websites') { fetchWebsites(true); }
         if (activeTab === 'tab-topology') { fetchTopologyData(true); }
-    }, 2000);
+    }, 3000);
 }
 
 function stopAutoRefresh() {
@@ -832,17 +884,58 @@ function onLanPortAliasChange(iface, alias) {
 
 let _lanGridRendered = false;
 
+function physicalNicModel(ports,onboard,count,appearance) {
+ if(onboard) return `<div class="rear-io-model"><span class="rear-io-screw screw-left" aria-hidden="true"></span><div class="rear-io-label">MAINBOARD / REAR I/O</div><div class="rear-io-ports">${ports}</div><span class="rear-io-screw screw-right" aria-hidden="true"></span></div>`;
+ return `<div class="pcie-model-stage"><div class="pcie-card-model ports-${count} ${appearance==='silicom'?'model-silicom':'model-generic-dual'}"><div class="pcie-pcb" aria-hidden="true"><span class="pcb-mount mount-top"></span><span class="pcb-mount mount-bottom"></span><div class="pcb-traces"></div><span class="pcb-silkscreen">${appearance==='silicom'?'SILICOM PE310G4i40EU-T':'82576 · DUAL GIGABIT'}<br>PCI EXPRESS · ${count} PORT</span><div class="pcb-heatsink"><span></span></div>${appearance==='silicom'?'<div class="silicom-power-header"></div><div class="silicom-inductors"><i></i><i></i></div><div class="silicom-sticker">SILICOM<br>PE310G4i40EU-T</div>':'<div class="generic-transformers"><i></i><i></i></div>'}<div class="pcb-controller">LAN<br>CTRL</div><div class="pcb-components"><i></i><i></i><i></i><i></i></div><span class="pcb-mark">NETWORK INTERFACE</span><div class="pcie-gold-fingers"></div></div><div class="pcie-bracket"><span class="bracket-tab" aria-hidden="true"></span><div class="bracket-ports">${ports}</div><span class="bracket-foot" aria-hidden="true"></span></div></div><div class="pcie-model-legend"><span>PCIe 金手指</span><span>点击挡板网口 →</span></div></div>`;
+}
+function updateNicTemperatureReadings() {
+ const details=_cachedNetworkMode?.lanDetails||{};
+ document.querySelectorAll('.nic-temperature').forEach(box=>{
+  const ports=Object.values(details).filter(d=>d.cardId===box.dataset.card);
+  const readings=ports.map(d=>d.temperature).filter(t=>Number.isFinite(t?.celsius));
+  const value=box.querySelector('strong'),note=box.querySelector('.nic-temperature-source');
+  const reading=readings.sort((a,b)=>b.celsius-a.celsius)[0];
+  value.textContent=reading?String(reading.celsius):'—';
+  note.textContent=reading?reading.source:(ports.some(d=>d.temperature?.error)?'采集暂不可用':'未上报独立温度');
+  box.title=reading?'采样时间：'+new Date(reading.timestamp).toLocaleTimeString():'没有对应的独立温度读数，不使用主板环境温度代替';
+ });
+}
+let selectedNicPort=null;
+function selectNicPort(name) {
+    selectedNicPort=selectedNicPort===name?null:name;
+    document.querySelectorAll('.nic-port-panel').forEach(p=>p.hidden=p.dataset.port!==selectedNicPort);
+    document.querySelectorAll('.nic-port-button').forEach(b=>{const active=b.dataset.port===selectedNicPort;b.classList.toggle('selected',active);b.setAttribute('aria-expanded',String(active));});
+    document.querySelectorAll('.nic-physical-group').forEach(g=>g.classList.toggle('has-selection',!!g.querySelector('.nic-port-panel:not([hidden])')));
+}
+function lanRateLabel(value) {
+    return Number.isFinite(value) && value > 0 ? (value >= 1000 ? value / 1000 + ' Gbps' : value + ' Mbps') : '未上报';
+}
 function renderLanModesGrid(force = false) {
     const container = document.getElementById('lan-modes-grid');
     if (!container || !_cachedNetworkMode) return;
 
-    // Do not rebuild DOM if already rendered and user may be interacting, unless forced
+    const existingPorts=[...container.querySelectorAll('.nic-port-button')].map(b=>b.dataset.port).filter(n=>n!=='ipmi').sort();
+    const incomingPorts=Object.keys(_cachedNetworkMode.lanDetails||{}).sort();
+    if(_lanGridRendered && JSON.stringify(existingPorts)!==JSON.stringify(incomingPorts) && !container.contains(document.activeElement))force=true;
+
+    // Detect if any VM or CT binding or active priority has changed
+    const currentBindingSig = Object.entries(_cachedNetworkMode.lanDetails || {}).map(([k, v]) => `${k}:${v.activePriority}:${v.vmBinding?.vmName || ''}:${v.vmBinding?.isPassthrough}:${v.vmBinding?.isBridge}`).sort().join('|');
+    if (_lanGridRendered && window._lastBindingSig !== undefined && window._lastBindingSig !== currentBindingSig && !container.contains(document.activeElement)) {
+        force = true;
+    }
+    window._lastBindingSig = currentBindingSig;
+    // Keep the model, focus and drafts intact during polling.
     if (_lanGridRendered && !force) {
+        updateNicTemperatureReadings();
         // Just update dynamic status text without rebuilding inputs
-        const curWan = _cachedNetworkMode.wan_interface || 'enp4s0';
+        const curWan = _cachedNetworkMode.wan_interface || '';
         const lanDetails = _cachedNetworkMode.lanDetails || {};
         for (const [iface, det] of Object.entries(lanDetails)) {
-            if (iface === curWan) continue;
+
+            const portButton=[...document.querySelectorAll('.nic-port-button')].find(b=>b.dataset.port===iface);
+            if(portButton){portButton.classList.toggle('connected',!det.isIdle);const text=portButton.querySelector('.nic-port-speed');if(text)text.textContent=det.isIdle?'未连接 · '+lanRateLabel(det.maxSpeedMbps):lanRateLabel(det.negotiatedSpeedMbps)+' 已连接';}
+            const rateEl = document.getElementById(`lan-rates-${iface}`);
+            if(rateEl) rateEl.textContent = '硬件最高速率：' + lanRateLabel(det.maxSpeedMbps) + ' · 当前协商：' + (det.isIdle ? '未连接' : lanRateLabel(det.negotiatedSpeedMbps));
             const statusEl = document.getElementById(`lan-link-status-${iface}`);
             if (statusEl) {
                 const isIdle = det.isIdle !== false;
@@ -854,35 +947,48 @@ function renderLanModesGrid(force = false) {
         return;
     }
 
-    const curWan = _cachedNetworkMode.wan_interface || 'enp4s0';
+    const curWan = _cachedNetworkMode.wan_interface || '';
     const lanDetails = _cachedNetworkMode.lanDetails || {};
     const lanModes = _cachedNetworkMode.lan_modes || {};
 
-    const ifaceNames = Object.keys(lanDetails).filter(n => n !== curWan);
+    const ifaceNames = Object.keys(lanDetails).sort((a,b)=>(lanDetails[a].pciAddress||a).localeCompare(lanDetails[b].pciAddress||b));
 
     if (ifaceNames.length === 0) {
         container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:20px; color:var(--text-secondary);">暂无检测到其他 LAN 物理扩展端口</div>';
         return;
     }
 
-    container.innerHTML = ifaceNames.map(iface => {
+    const portCards = ifaceNames.map(iface => {
         const detail = lanDetails[iface] || {};
-        const cfg = lanModes[iface] || { mode: 'switch', isolated: false, alias: '' };
-        const mode = cfg.mode || 'switch';
+        const cfg = lanModes[iface] || { mode: 'standalone', isolated: false, alias: '' };
+        const mode = cfg.mode || 'standalone';
         const isIdle = detail.isIdle !== false;
         const mac = detail.mac || '-';
+        const vmBinding = detail.vmBinding;
+
+        let vmBadge = '';
+        if (vmBinding) {
+            const isCt = Boolean(vmBinding.isCt);
+            const typeLabel = isCt ? 'CT容器' : '虚拟机';
+            const icon = isCt ? 'fa-cube' : 'fa-server';
+            if (vmBinding.isPassthrough) {
+                vmBadge = `<span class="badge" style="background:rgba(168,85,247,0.2); color:#c084fc; border:1px solid rgba(168,85,247,0.45); font-size:11px; padding:2px 8px; font-weight:700;"><i class="fa-solid ${icon}"></i> ⚡ ${typeLabel}独占直通: ${escapeHtml(vmBinding.vmName)}</span>`;
+            } else if (vmBinding.isBridge) {
+                vmBadge = `<span class="badge" style="background:rgba(0,149,217,0.2); color:#38bdf8; border:1px solid rgba(0,149,217,0.45); font-size:11px; padding:2px 8px; font-weight:700;"><i class="fa-solid fa-network-wired"></i> 🖧 系统共享网口 (${typeLabel}: ${escapeHtml(vmBinding.vmName)})</span>`;
+            }
+        }
 
         let priorityPill = '';
         if (isIdle) {
             priorityPill = `
                 <span class="badge" style="background:rgba(234,179,8,0.12); color:#eab308; border:1px solid rgba(234,179,8,0.25); font-size:11px; padding:2px 7px;">
-                    🛡️ PVE 优先待命 (空闲/未插线)
+                    ⚪ 网口未连接
                 </span>
             `;
         } else {
             priorityPill = `
                 <span class="badge" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.3); font-size:11px; padding:2px 7px;">
-                    🟢 物理在用 (10002 配置生效)
+                    🟢 网口已连接
                 </span>
             `;
         }
@@ -891,8 +997,37 @@ function renderLanModesGrid(force = false) {
             ? `<span style="color:var(--accent-green); font-size:11.5px; font-weight:600;">● 链路已连接 (UP)</span>`
             : `<span style="color:var(--text-secondary); font-size:11.5px;">○ 网口闲置 (DOWN / 待接线)</span>`;
 
+        let vmLinkageCard = '';
+        if (vmBinding) {
+            const isCt = Boolean(vmBinding.isCt);
+            const targetType = isCt ? 'CT 容器' : '虚拟机';
+            const cardTitle = `${targetType}端口联动 · 【${escapeHtml(vmBinding.vmName)}】`;
+            const badgeText = vmBinding.isPassthrough 
+                ? '物理网卡独占直通 (单独使用)' 
+                : `系统与${targetType}共享网口 (局域网同网段桥接)`;
+            const jumpAction = isCt 
+                ? `switchTab('tab-vms'); if(typeof esxiSwitchVmTab==='function') esxiSwitchVmTab('ct'); if(typeof esxiSelectCt==='function') esxiSelectCt('${escapeHtml(vmBinding.vmName)}');`
+                : `switchTab('tab-vms'); if(typeof esxiSwitchVmTab==='function') esxiSwitchVmTab('vm'); if(typeof esxiSelectVm==='function') esxiSelectVm('${escapeHtml(vmBinding.vmName)}');`;
+            const jumpBtnText = isCt ? '前往 CT 容器管理' : '前往虚拟机管理';
+
+            vmLinkageCard = `
+            <div class="lan-vm-linkage-panel" style="margin:8px 0; background:rgba(0,0,0,0.15); border:1px solid ${vmBinding.isPassthrough ? 'rgba(168,85,247,0.35)' : 'rgba(0,149,217,0.35)'}; border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12.5px; font-weight:700; color:${vmBinding.isPassthrough ? '#c084fc' : '#38bdf8'};">
+                        <i class="fa-solid ${vmBinding.isPassthrough ? 'fa-shield-halved' : 'fa-network-wired'}"></i>
+                        ${cardTitle}
+                    </span>
+                    <span class="badge" style="font-size:10.5px; background:${vmBinding.isPassthrough ? 'rgba(168,85,247,0.2)' : 'rgba(0,149,217,0.2)'}; color:${vmBinding.isPassthrough ? '#c084fc' : '#38bdf8'}; border:1px solid ${vmBinding.isPassthrough ? 'rgba(168,85,247,0.3)' : 'rgba(0,149,217,0.3)'};">${badgeText}</span>
+                </div>
+                <button type="button" class="btn btn-xs btn-primary" onclick="${jumpAction}" style="font-size:11px; padding:3px 9px;">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> ${jumpBtnText}
+                </button>
+            </div>
+            `;
+        }
+
         return `
-            <div class="card" style="background:var(--bg-secondary); border:1px solid ${!isIdle ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:10px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+            <div class="card lan-port-card" style="background:var(--bg-secondary); border:1px solid ${vmBinding?.isPassthrough ? 'rgba(168,85,247,0.5)' : !isIdle ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:10px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
                 <div>
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
                         <div>
@@ -904,18 +1039,22 @@ function renderLanModesGrid(force = false) {
                                 MAC: ${mac}
                             </div>
                         </div>
-                        <div>${priorityPill}</div>
+                        <div>${vmBadge ? vmBadge + ' ' : ''}${detail.isManagement ? '<span class="badge badge-success">Ubuntu 管理连接</span> ' : ''}${detail.isWan ? '<span class="badge">指定上行口</span> ' : ''}${priorityPill}</div>
                     </div>
 
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:12px; background:var(--bg-primary); padding:6px 10px; border-radius:6px;">
                         <span id="lan-link-status-${iface}">${linkStatusPill}</span>
-                        <span style="font-size:11px; color:var(--text-secondary);">${detail.priorityDesc || ''}</span>
+                        <span style="font-size:11px; color:${vmBinding ? (vmBinding.isPassthrough ? '#c084fc' : '#38bdf8') : 'var(--text-secondary)'}; font-weight:${vmBinding ? '600' : 'normal'};">${detail.priorityDesc || ''}</span>
                     </div>
+
+                    <div class="lan-port-rates" id="lan-rates-${iface}">硬件最高速率：${lanRateLabel(detail.maxSpeedMbps)} · 当前协商：${isIdle?'未连接':lanRateLabel(detail.negotiatedSpeedMbps)}</div>
+
+                    ${vmLinkageCard}
 
                     <label style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:6px; display:block;">
                         ⚙️ 独立工作模式选择:
                     </label>
-                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin-bottom:10px;">
+                    <div class="lan-mode-options" style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; margin-bottom:10px;">
                         <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'switch' ? 'btn-primary active' : 'btn-secondary'}" data-mode="switch" onclick="onLanPortModeChange('${iface}', 'switch')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
                             <div style="font-weight:700;">🖧 交换模式</div>
                             <div style="font-size:10px; opacity:0.8;">透明桥接内网 (同网段)</div>
@@ -925,8 +1064,8 @@ function renderLanModesGrid(force = false) {
                             <div style="font-size:10px; opacity:0.8;">PVLAN 隔离 (防环路)</div>
                         </button>
                         <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'standalone' ? 'btn-primary active' : 'btn-secondary'}" data-mode="standalone" onclick="onLanPortModeChange('${iface}', 'standalone')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
-                            <div style="font-weight:700;">🔌 独立/直通</div>
-                            <div style="font-size:10px; opacity:0.8;">脱离交换 (专用网口)</div>
+                            <div style="font-weight:700;">🔌 独立物理网口</div>
+                            <div style="font-size:10px; opacity:0.8;">独立使用 (未加入交换网桥)</div>
                         </button>
                         <button type="button" class="btn btn-sm lan-mode-pill-${iface} ${mode === 'router' ? 'btn-primary active' : 'btn-secondary'}" data-mode="router" onclick="onLanPortModeChange('${iface}', 'router')" style="text-align:left; padding:8px 10px; font-size:11.5px;">
                             <div style="font-weight:700;">🚀 路由私网</div>
@@ -952,8 +1091,28 @@ function renderLanModesGrid(force = false) {
                 </div>
             </div>
         `;
+    });
+    const groups=new Map();
+    ifaceNames.forEach((name,i)=>{const d=lanDetails[name],id=d.cardId||name;if(!groups.has(id))groups.set(id,{id,onboard:d.onboard,model:d.model,ports:[]});groups.get(id).ports.push({name,html:portCards[i]});});
+    container.innerHTML=[...groups.values()].sort((a,b)=>Number(b.onboard)-Number(a.onboard)||a.id.localeCompare(b.id)).map((g,i)=>{
+        const rates=[...new Set(g.ports.map(p=>lanRateLabel(lanDetails[p.name].maxSpeedMbps)))].join(' / ');
+        const appearance=g.ports.some(p=>['00:e0:ed:93:70:c0','00:e0:ed:93:70:c1','00:e0:ed:93:70:c2','00:e0:ed:93:70:c3'].includes(lanDetails[p.name].mac))?'silicom':'generic';
+        const displayModel=appearance==='silicom'?'Silicom PE310G4i40EU-T · 四口万兆':g.model||'以太网卡';
+        const stableLabel=g.onboard?'ONBOARD / X540':appearance==='silicom'?'PCIE ADAPTER / SLOT 03':'PCIE ADAPTER / SLOT '+(g.id.match(/:([0-9a-f]{2}):/i)?.[1]||'--').toUpperCase();
+        const stableClass=g.onboard?'nic-card-onboard':appearance==='silicom'?'nic-card-silicom':'nic-card-generic';
+        const ports=g.ports.map((p,j)=>{
+            const d=lanDetails[p.name];
+            const vm=d.vmBinding;
+            const vmTag=vm?(vm.isPassthrough?` · 直通[${escapeHtml(vm.vmName)}]`:vm.isBridge?` · 桥接[${escapeHtml(vm.vmName)}]`:''):'';
+            const vmSpeedLabel=vm&&vm.isPassthrough?`⚡ 直通[${escapeHtml(vm.vmName)}]`:(d.isIdle?'未连接 · '+lanRateLabel(d.maxSpeedMbps):lanRateLabel(d.negotiatedSpeedMbps)+' 已连接');
+            return `<button type="button" class="nic-port-button ${d.isIdle?'':'connected'} ${vm&&vm.isPassthrough?'nic-port-passthrough':''}" data-port="${escapeHtml(p.name)}" aria-expanded="false" aria-controls="nic-panel-${escapeHtml(p.name)}" onclick="selectNicPort(this.dataset.port)"><span class="nic-port-number">PORT ${j+1}${vmTag}${d.isManagement?' · 系统连接':''}</span><span class="nic-jack" aria-hidden="true"><i></i><b></b></span><strong>${escapeHtml(p.name)}</strong><span class="nic-port-speed" style="${vm&&vm.isPassthrough?'color:#c084fc;font-weight:700;':''}">${vmSpeedLabel}</span></button>`;
+        }).join('');
+        return `<section class="nic-physical-group ${stableClass}"><header class="nic-group-heading"><div><span class="nic-kicker">${stableLabel}</span><h3>${g.onboard?'板载网卡':'扩展网卡'} · ${g.ports.length} 口</h3><p>${escapeHtml(displayModel)}</p></div><span class="ops-tag">${escapeHtml(rates)} / 口</span></header><div class="nic-model-with-temp">${physicalNicModel(ports,g.onboard,g.ports.length,appearance)}<aside class="nic-temperature" data-card="${escapeHtml(g.id)}"><span>网卡温度</span><div><strong>—</strong><small>°C</small></div><p class="nic-temperature-source">读取中</p></aside></div><div class="nic-model-caption"><span>${g.onboard?'后置接口示意':appearance==='silicom'?'按同型号实物外观绘制 · 非尺寸复刻':'常见 82576 双口卡 · 通用外观示意'}</span><span>PCI ${escapeHtml(g.id)}</span></div>${g.ports.map(p=>`<div class="nic-port-panel" id="nic-panel-${escapeHtml(p.name)}" data-port="${escapeHtml(p.name)}" hidden><div class="nic-detail-heading"><strong>端口管理 · ${escapeHtml(p.name)}</strong><button type="button" class="btn btn-secondary" onclick="selectNicPort(null)">收起 ×</button></div>${p.html}</div>`).join('')}</section>`;
     }).join('');
-
+    const bmc=_cachedNetworkMode.bmcPort||{};
+    container.insertAdjacentHTML('afterbegin',`<section class="nic-physical-group bmc-port-group"><header class="nic-group-heading"><div><span class="nic-kicker">OUT-OF-BAND MANAGEMENT</span><h3>远程管理口 · IPMI</h3><p>板载独立管理接口 · BMC</p></div><span class="ops-tag">${escapeHtml(bmc.ip||'未读取')}</span></header><div class="rear-io-model rear-io-bmc"><span class="rear-io-screw screw-left" aria-hidden="true"></span><div class="rear-io-label">DEDICATED MANAGEMENT / IPMI</div><div class="rear-io-ports"><button type="button" class="nic-port-button" data-port="ipmi" aria-expanded="false" aria-controls="nic-panel-ipmi" onclick="selectNicPort(this.dataset.port)"><span class="nic-port-number">MANAGEMENT</span><span class="nic-jack" aria-hidden="true"><i></i><b></b></span><strong>IPMI / KVM</strong><span class="nic-port-speed">查看管理信息</span></button></div><span class="rear-io-screw screw-right" aria-hidden="true"></span></div><div class="nic-model-caption">独立于 Ubuntu · 点击管理口展开</div><div class="nic-port-panel" id="nic-panel-ipmi" data-port="ipmi" hidden><div class="nic-detail-heading"><strong>远程管理接口</strong><button class="btn btn-secondary" onclick="selectNicPort(null)">收起 ×</button></div><p>管理地址：${escapeHtml(bmc.ip||'未读取')}</p><p>MAC：${escapeHtml(bmc.mac||'未读取')}</p><p>地址来源：${escapeHtml(bmc.source||'未知')}</p><p class="ops-muted">用于远程控制台、虚拟介质和电源管理；不参与 Ubuntu 路由或交换配置。链路速率未上报。</p></div></section>`);
+    if(selectedNicPort){const selected=selectedNicPort;selectedNicPort=null;selectNicPort(selected);}
+    updateNicTemperatureReadings();
     _lanGridRendered = true;
 }
 
@@ -975,9 +1134,9 @@ async function fetchNetworkMode(forceRender = false) {
         // 1. Update Status Badge
         const statusBadge = document.getElementById('current-mode-status-badge');
         if (statusBadge) {
-            const wan = d.wan_interface || 'enp4s0';
+            const wan = d.wan_interface || '';
             const lanCount = Object.keys(d.lanDetails || {}).filter(k => k !== wan).length;
-            statusBadge.innerHTML = `<span class="badge badge-success" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-circle-check"></i> WAN [${wan}] + ${lanCount} 个独立 LAN 模式运行中</span>`;
+            statusBadge.innerHTML = `<span class="badge badge-success" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-circle-check"></i> ${wan ? '指定 WAN [' + escapeHtml(wan) + '] · ' : '未指定 WAN · '}${lanCount} 个网口按各自配置运行</span>`;
         }
 
         // 2. Update WAN Selector only if not currently focused
@@ -985,7 +1144,7 @@ async function fetchNetworkMode(forceRender = false) {
         if (wanSelect && d.lanDetails && document.activeElement !== wanSelect) {
             const currentSelected = wanSelect.value || d.wan_interface;
             if (!wanSelect.options || wanSelect.options.length <= 1) {
-                wanSelect.innerHTML = Object.keys(d.lanDetails).map(name => {
+                wanSelect.innerHTML = '<option value="">不指定 WAN（独立网口）</option>' + Object.keys(d.lanDetails).map(name => {
                     const det = d.lanDetails[name];
                     const isDown = det.isIdle;
                     const desc = `${name} (${isDown ? '○ 闲置待接线' : '● 在线连接'} / MAC: ${det.mac || '-'})`;
@@ -1008,17 +1167,17 @@ async function fetchNetworkMode(forceRender = false) {
 async function applyNetworkWorkingMode() {
     if (!_cachedNetworkMode) return;
 
-    const wanIface = document.getElementById('net-mode-wan-select')?.value || _cachedNetworkMode.wan_interface || 'enp4s0';
+    const wanIface = document.getElementById('net-mode-wan-select')?.value || _cachedNetworkMode.wan_interface || '';
     _cachedNetworkMode.wan_interface = wanIface;
 
     const lanIfaces = Object.keys(_cachedNetworkMode.lan_modes || {}).filter(k => k !== wanIface);
 
     if (!confirm(`确定要保存并应用当前网络配置吗？
 
-• 固定上行 WAN 口: ${wanIface} (PVE 主核心管理通道)
+• 固定上行 WAN 口: ${wanIface} 
 • 已配置 ${lanIfaces.length} 个独立 LAN 端口工作模式
 
-系统将即时热更新底层交换/隔离策略，全程无缝防失联。`)) {
+将保存端口模式配置；修改网络可能影响连接。`)) {
         return;
     }
 
@@ -1059,10 +1218,13 @@ async function applyNetworkWorkingMode() {
     }
 }
 
-async function fetchNetwork() {
+let networkFetchPending=false;
+async function fetchNetwork(forceRender = false) {
+    if(networkFetchPending)return;
+    networkFetchPending=true;
     try {
-        // Fetch Mode and Interfaces in parallel
-        await fetchNetworkMode(true);
+        // Poll live readings, forcing re-render when requested or bindings change
+        await fetchNetworkMode(forceRender);
 
         const [resIface, resOverview] = await Promise.all([
             apiFetch('/api/network/interfaces'),
@@ -1074,14 +1236,18 @@ async function fetchNetwork() {
         if (!jsonIface.success) return;
 
         const ifaces = jsonIface.data || [];
+        const mainLink = ifaces.find(i => i.gateway);
+        const mini = document.getElementById('mini-watchdog-state');
+        if (mini) mini.textContent = mainLink ? `管理链路: ${mainLink.name} ${mainLink.isConnected ? '在线' : '未连接'}` : '未发现默认路由';
+
         const trafficStats = jsonOverview.data?.trafficStatsKB || {};
 
         // Dynamically Populate Network Mode Working Setup (WAN Select & LAN Checkboxes)
         const physIfaces = ifaces.filter(i => i.is_physical || i.isPhysical);
         const wanSelect = document.getElementById('net-mode-wan-select');
-        if (wanSelect && physIfaces.length > 0) {
+        if (wanSelect && physIfaces.length > 0 && document.activeElement !== wanSelect && JSON.stringify([...wanSelect.options].map(o=>o.value).filter(Boolean).sort()) !== JSON.stringify(physIfaces.map(i=>i.name).sort())) {
             const currentSelected = wanSelect.value || _cachedNetworkMode?.wan_interface;
-            wanSelect.innerHTML = physIfaces.map(i => {
+            wanSelect.innerHTML = '<option value="">不指定 WAN（独立网口）</option>' + physIfaces.map(i => {
                 const desc = `${i.name} (${i.hardware_spec || '以太网卡'} / MAC: ${i.mac || '-'})`;
                 return `<option value="${i.name}">${desc}</option>`;
             }).join('');
@@ -1090,12 +1256,12 @@ async function fetchNetwork() {
             } else if (physIfaces.some(i => i.name === _cachedNetworkMode?.wan_interface)) {
                 wanSelect.value = _cachedNetworkMode.wan_interface;
             } else {
-                wanSelect.value = physIfaces[0].name;
+                wanSelect.value = ''; 
             }
         }
 
         const lanContainer = document.getElementById('net-mode-lan-checkboxes');
-        if (lanContainer && physIfaces.length > 0) {
+        if (lanContainer && physIfaces.length > 0 && !lanContainer.children.length) {
             const selectedLans = _cachedNetworkMode?.lan_interfaces || [];
             const curWan = wanSelect ? wanSelect.value : '';
             lanContainer.innerHTML = physIfaces.map(i => {
@@ -1116,7 +1282,17 @@ async function fetchNetwork() {
                 
                 // Role Badge Styling
                 let roleBadgeHtml = '';
-                if (iface.role === 'WAN') {
+                const vm = iface.vmBinding;
+                if (iface.role === 'VM_PASSTHROUGH' || (vm && vm.isPassthrough)) {
+                    const isCt = Boolean(vm?.isCt);
+                    const label = isCt ? 'CT容器独占直通' : '虚拟机独占直通';
+                    const icon = isCt ? 'fa-cube' : 'fa-server';
+                    roleBadgeHtml = `<span class="badge" style="background:rgba(168,85,247,0.2); color:#c084fc; border:1px solid rgba(168,85,247,0.45); font-size:11px; padding:2px 8px; font-weight:700;"><i class="fa-solid ${icon}"></i> ⚡ ${label} (${escapeHtml(vm?.vmName || (isCt ? 'CT' : 'VM'))})</span>`;
+                } else if (iface.role === 'VM_BRIDGE' || (vm && vm.isBridge)) {
+                    const isCt = Boolean(vm?.isCt);
+                    const label = isCt ? 'CT容器共享桥接' : '虚拟机共享桥接';
+                    roleBadgeHtml = `<span class="badge" style="background:rgba(0,149,217,0.2); color:#38bdf8; border:1px solid rgba(0,149,217,0.45); font-size:11px; padding:2px 8px; font-weight:700;"><i class="fa-solid fa-network-wired"></i> 🖧 ${label} (${escapeHtml(vm?.vmName || (isCt ? 'CT' : 'VM'))})</span>`;
+                } else if (iface.role === 'WAN') {
                     roleBadgeHtml = `<span class="badge" style="background:rgba(59,130,246,0.15); color:#38bdf8; border:1px solid rgba(59,130,246,0.3); font-size:11px; padding:2px 8px;"><i class="fa-solid fa-arrow-down-up-across-line"></i> 🔵 输入网口 (WAN)</span>`;
                 } else if (iface.role === 'LAN_SWITCH') {
                     roleBadgeHtml = `<span class="badge" style="background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.3); font-size:11px; padding:2px 8px;"><i class="fa-solid fa-network-wired"></i> 🟢 交换机端口 (LAN)</span>`;
@@ -1125,14 +1301,34 @@ async function fetchNetwork() {
                 } else if (iface.role === 'BRIDGE_SWITCH' || iface.role === 'BRIDGE_ROUTER') {
                     roleBadgeHtml = `<span class="badge badge-secondary" style="font-size:11px; padding:2px 8px;">🖧 虚拟网桥 (Bridge)</span>`;
                 } else {
-                    roleBadgeHtml = `<span class="badge badge-secondary" style="font-size:11px; padding:2px 8px;">⚪ ${iface.is_physical ? '独立物理网口' : '虚拟接口'}</span>`;
+                    roleBadgeHtml = `<span class="badge badge-secondary" style="font-size:11px; padding:2px 8px;">⚪ ${escapeHtml(iface.role_desc || (iface.is_physical ? '独立物理网口' : '虚拟接口'))}</span>`;
                 }
 
                 const stateColor = iface.isConnected ? 'var(--accent-green)' : 'var(--text-secondary)';
                 const stateText = iface.isConnected ? '● 链路已连通 (UP)' : '○ 链路未连接 (DOWN)';
 
+                let vmSection = '';
+                if (vm) {
+                    const isCt = Boolean(vm.isCt);
+                    const targetType = isCt ? 'CT容器' : '虚拟机';
+                    const jumpAction = isCt
+                        ? `switchTab('tab-vms'); if(typeof esxiSwitchVmTab==='function') esxiSwitchVmTab('ct'); if(typeof esxiSelectCt==='function') esxiSelectCt('${escapeHtml(vm.vmName)}');`
+                        : `switchTab('tab-vms'); if(typeof esxiSwitchVmTab==='function') esxiSwitchVmTab('vm'); if(typeof esxiSelectVm==='function') esxiSelectVm('${escapeHtml(vm.vmName)}');`;
+
+                    vmSection = `
+                    <div style="background:var(--bg-secondary); border:1px solid ${vm.isPassthrough ? 'rgba(168,85,247,0.35)' : 'rgba(0,149,217,0.35)'}; border-radius:6px; padding:8px 10px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                        <span style="font-weight:700; color:${vm.isPassthrough ? '#c084fc' : '#38bdf8'}; font-size:11.5px;">
+                            <i class="fa-solid ${vm.isPassthrough ? 'fa-shield-halved' : 'fa-link'}"></i> 绑定${targetType}：【${escapeHtml(vm.vmName)}】(${vm.isPassthrough ? '硬件直通独占' : '二层桥接'})
+                        </span>
+                        <button type="button" class="btn btn-xs btn-primary" onclick="${jumpAction}" style="font-size:10.5px; padding:2px 6px;">
+                            查看${targetType} <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                    `;
+                }
+
                 return `
-                    <div class="net-iface-card ${iface.isConnected ? 'connected' : 'disconnected'}" style="background:var(--bg-secondary); border:1px solid ${iface.isConnected ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:8px; padding:16px;">
+                    <div class="net-iface-card ${iface.isConnected ? 'connected' : 'disconnected'}" style="background:var(--bg-secondary); border:1px solid ${vm?.isPassthrough ? 'rgba(168,85,247,0.45)' : iface.isConnected ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}; border-radius:8px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <span style="font-weight:700; font-size:16px; font-family:var(--font-mono, monospace); color:var(--text-primary);">${iface.name}</span>
@@ -1152,6 +1348,7 @@ async function fetchNetwork() {
                             <div style="font-size:11px; color:var(--accent-blue); margin-bottom:6px; font-weight:600;">
                                 📌 用途角色: ${iface.role_desc || '普通以太网连接'}
                             </div>
+                            ${vmSection}
                             <div class="iface-stat-row" style="display:flex; justify-content:space-between; margin-bottom:3px;">
                                 <span style="color:var(--text-secondary);">IPv4 地址:</span>
                                 <span class="mono" style="font-weight:600; color:var(--accent-blue);">${iface.ipAddress}</span>
@@ -1171,7 +1368,7 @@ async function fetchNetwork() {
                                 if (connDevs.length > 0) {
                                     const devBadges = connDevs.map(d => {
                                         const isGw = d.isGateway;
-                                        const tagText = isGw ? '上级网关' : (d.hostname ? d.hostname : (iface.role === 'WAN' ? '上级设备' : '下级终端'));
+                                        const tagText = isGw ? '上级网关' : (d.hostname ? d.hostname : (iface.role === 'WAN' ? '上级设备' : '邻居设备'));
                                         const tagBg = isGw ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.15)';
                                         const tagColor = isGw ? '#38bdf8' : '#34d399';
                                         return `
@@ -1185,7 +1382,7 @@ async function fetchNetwork() {
                                         `;
                                     }).join('');
 
-                                    const titleText = iface.role === 'WAN' ? '🌐 上级直连设备 / 网关 IP 列表' : '🔗 下级匹配分配 / 接入终端 IP 列表';
+                                    const titleText = iface.role === 'WAN' ? '🌐 上级直连设备 / 网关 IP 列表' : '🔗 此接口发现的邻居 IP（不代表直连设备）';
                                     const titleColor = iface.role === 'WAN' ? 'var(--accent-blue)' : 'var(--accent-green)';
 
                                     return `
@@ -1202,7 +1399,7 @@ async function fetchNetwork() {
                                 } else if (iface.is_physical) {
                                     return `
                                         <div style="margin-top:8px; border-top:1px dashed var(--border-color); padding-top:6px; font-size:11px; color:var(--text-secondary); display:flex; align-items:center; gap:5px;">
-                                            <span>⚪ 暂无匹配到下级设备 (端口空闲 / 待接入设备)</span>
+                                            <span>⚪ 暂未发现邻居设备</span>
                                         </div>
                                     `;
                                 }
@@ -1256,7 +1453,7 @@ async function fetchNetwork() {
 
     } catch (e) {
         console.error('fetchNetwork error:', e);
-    }
+    } finally {networkFetchPending=false;}
 }
 
 async function controlCellular(action) {
@@ -2695,18 +2892,16 @@ function renderDisksLayout(disksList) {
         return;
     }
 
-    const validDisks = disksList.filter(d => d.type === 'disk');
+    const validDisks = disksList.filter(d =>
+        d.type === 'disk' && parseFloat(String(d.size || '0')) > 0
+    );
     if (validDisks.length === 0) {
         container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px; width:100%;">未检测到物理磁盘</div>';
         return;
     }
 
-    let numCols = 3;
-    if (window.innerWidth <= 768) {
-        numCols = 1;
-    } else if (window.innerWidth <= 1200) {
-        numCols = 2;
-    }
+    // Preserve the existing drive-card visual, one full-width drive per row.
+    let numCols = 1;
     currentDiskCols = numCols;
 
     const colCards = Array.from({ length: numCols }, () => []);
@@ -2781,10 +2976,13 @@ function renderDisksLayout(disksList) {
 
         let badSectors = d._smart ? d._smart.badSectors : 0;
         let powerHours = d._smart ? d._smart.powerHours : 0;
-        let healthPct = d._smart ? d._smart.healthPct : 100;
+        let healthPct = d._smart && Number.isFinite(d._smart.healthPct) ? d._smart.healthPct : null;
+        let smartKnown = d._smart && d._smart.status !== 'UNKNOWN' && healthPct !== null;
 
         let healthBadge = '';
-        if (badSectors > 0) {
+        if (!smartKnown) {
+            healthBadge = '<span class="disk-health-pill" style="color:var(--text-secondary)">SMART 无数据</span>';
+        } else if (badSectors > 0) {
             healthBadge = `<span class="disk-health-pill warn">⚠️ 坏道 ${badSectors} 块</span>`;
         } else if (isSsd) {
             healthBadge = `<span class="disk-health-pill ok">✔ 良好 (寿命 100%)</span>`;
@@ -2805,7 +3003,7 @@ function renderDisksLayout(disksList) {
                 <span>实时温度: <strong style="color:${tempColor};">${tempDetailStr}</strong></span>
                 <span>物理坏道: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${badSectors} 块</strong></span>
                 <span>通电: <strong>${powerHours} 小时</strong></span>
-                <span>健康: <strong style="color:${badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${isSsd ? '100% 满血' : healthPct + '%'}</strong></span>
+                <span>健康: <strong style="color:${!smartKnown ? 'var(--text-secondary)' : badSectors > 0 ? 'var(--accent-danger)' : 'var(--accent-green)'};">${!smartKnown ? '无数据' : isSsd ? '100%' : healthPct + '%'}</strong></span>
             </div>
         `;
 
@@ -2890,7 +3088,7 @@ function renderDisksLayout(disksList) {
 
 window.addEventListener('resize', () => {
     if (!cachedDisksData) return;
-    const newCols = window.innerWidth <= 768 ? 1 : (window.innerWidth <= 1200 ? 2 : 3);
+    const newCols = 1;
     if (newCols !== currentDiskCols) {
         renderDisksLayout(cachedDisksData);
     }
@@ -3588,17 +3786,17 @@ async function fetchSharingStatus() {
         const sharesList = document.getElementById('smb-shares-list');
         if (sharesList) {
             if (d.smb.shares && d.smb.shares.length > 0) {
-                let html = '<table class="data-table"><thead><tr><th>共享名称</th><th>本地路径</th><th>访客访问</th><th>只读</th><th>备注</th><th>操作</th></tr></thead><tbody>';
+                let html = '<table class="data-table"><thead><tr><th>共享名称</th><th>本地路径</th><th>访问认证</th><th>权限</th><th>备注</th><th>操作</th></tr></thead><tbody>';
                 d.smb.shares.forEach(s => {
-                    const guestBadge = s.guest_ok === 'yes' ? '<span class="badge badge-primary">允许</span>' : '<span class="badge badge-secondary">禁止</span>';
+                    const authBadge = s.username ? `<span class="badge badge-primary"><i class="fa-solid fa-user-lock"></i> ${s.username}</span>` : '<span class="badge badge-secondary">待配置账号</span>';
                     const roBadge = s.read_only === 'yes' ? '<span class="badge badge-secondary">只读</span>' : '<span class="badge badge-primary">读写</span>';
                     html += `<tr>
                         <td style="font-weight:600;"><i class="fa-solid fa-folder" style="color:var(--accent-blue); margin-right:8px;"></i>📁 ${s.name}</td>
                         <td><code style="font-size:0.85rem; color:var(--text-secondary);">${s.path}</code></td>
-                        <td>${guestBadge}</td>
+                        <td>${authBadge}</td>
                         <td>${roBadge}</td>
                         <td style="color:var(--text-secondary);">${s.comment || ''}</td>
-                        <td><button class="btn btn-sm btn-danger" onclick="deleteSmbShare('${s.name}')">删除</button></td>
+                        <td style="display:flex; gap:6px;"><button class="btn btn-sm btn-secondary" onclick="editSmbShare('${encodeURIComponent(JSON.stringify(s))}')">认证设置</button><button class="btn btn-sm btn-danger" onclick="deleteSmbShare('${s.name}')">删除</button></td>
                     </tr>`;
                 });
                 html += '</tbody></table>';
@@ -3635,24 +3833,43 @@ function addSmbShare() {
     document.getElementById('smb-share-name').value = '';
     document.getElementById('smb-share-path').value = '';
     document.getElementById('smb-share-comment').value = '';
+    document.getElementById('smb-share-username').value = '';
+    document.getElementById('smb-share-password').value = '';
+    document.getElementById('smb-share-name').readOnly = false;
+    document.getElementById('smb-modal-title').innerHTML = '<i class="fa-solid fa-folder-plus" style="color:var(--accent-blue); margin-right:8px;"></i>添加 SMB 认证共享';
+    document.getElementById('smbShareModal').style.display = 'flex';
+}
+
+function editSmbShare(encodedShare) {
+    const share = JSON.parse(decodeURIComponent(encodedShare));
+    document.getElementById('smb-share-name').value = share.name || '';
+    document.getElementById('smb-share-name').readOnly = true;
+    document.getElementById('smb-share-path').value = share.path || '';
+    document.getElementById('smb-share-ro').value = share.read_only === 'yes' ? 'true' : 'false';
+    document.getElementById('smb-share-comment').value = share.comment || '';
+    document.getElementById('smb-share-username').value = share.username || '';
+    document.getElementById('smb-share-password').value = '';
+    document.getElementById('smb-modal-title').innerHTML = '<i class="fa-solid fa-shield-halved" style="color:var(--accent-blue); margin-right:8px;"></i>SMB 认证设置';
     document.getElementById('smbShareModal').style.display = 'flex';
 }
 
 async function submitSmbShare() {
     const name     = document.getElementById('smb-share-name').value.trim();
     const path     = document.getElementById('smb-share-path').value.trim();
-    const guest_ok = document.getElementById('smb-share-guest').value === 'true';
     const read_only= document.getElementById('smb-share-ro').value === 'true';
     const comment  = document.getElementById('smb-share-comment').value.trim();
+    const username = document.getElementById('smb-share-username').value.trim();
+    const password = document.getElementById('smb-share-password').value;
 
-    if (!name || !path) return alert('请输入共享名称和服务器本地绝对路径');
+    if (!name || !path || !username) return alert('请输入共享名称、服务器本地绝对路径和认证用户名');
+    if (password && password.length < 8) return alert('SMB 密码至少需要 8 位');
     
     document.getElementById('smbShareModal').style.display = 'none';
     try {
         const res = await apiFetch('/api/sharing/smb/share', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name, path, guest_ok, read_only, comment })
+            body: JSON.stringify({ name, path, read_only, comment, username, password })
         });
         const data = await res.json();
         if (data.success) {
@@ -3824,7 +4041,7 @@ async function startUpsScan(manual = false) {
             if (data.foundUsbUps) {
                 term.innerHTML += `
                     <div class="ups-log-row"><span class="log-tag tag-ok">[硬件匹配]</span> 🟢 成功发现直连设备: ${data.usbDeviceName || 'CyberPower USB-HID'}</div>
-                    <div class="ups-log-row"><span class="log-tag tag-ok">[驱动就绪]</span> 驱动适配: NUT usbhid-ups 协议栈就绪</div>
+                    <div class="ups-log-row"><span class="log-tag ${data.nutAvailable ? 'tag-ok' : 'tag-warn'}">[协议驱动]</span> ${data.nutAvailable ? 'NUT usbhid-ups 已连接并可读取实时数据' : '已识别 USB 硬件，但 NUT 驱动尚未建立通信'}</div>
                 `;
             } else if (data.foundTcpUps) {
                 term.innerHTML += `
@@ -4053,10 +4270,14 @@ async function proceedToUpsHandshake() {
             body: JSON.stringify(reqPayload)
         });
         const json = await res.json();
+        if (!res.ok || !json.success || !json.isOnline) {
+            updatePipelineStep(3, 'failed', 'UPS 实时通信失败', json.message || json.error || '未收到 UPS 实时数据');
+            throw new Error(json.message || json.error || 'UPS 驱动未返回在线状态');
+        }
         upsWizardLiveMetrics = json.data || {};
 
         await new Promise(r => setTimeout(r, 350));
-        updatePipelineStep(3, 'completed', '实时电网与电池状态采集成功', `输入市电: ${upsWizardLiveMetrics.inputVoltage || '229V'} · 电池: ${upsWizardLiveMetrics.batteryCharge || 100}% · 状态: ${upsWizardLiveMetrics.statusRaw || 'OL'}`);
+        updatePipelineStep(3, 'completed', '实时电网与电池状态采集成功', `输入市电: ${upsWizardLiveMetrics.inputVoltage} · 电池: ${upsWizardLiveMetrics.batteryCharge}% · 状态: ${upsWizardLiveMetrics.statusRaw}`);
 
         // Step 4: Daemon sync
         updatePipelineStep(4, 'active', '同步看门狗监控与断电停机保护', '正在激活毫秒级市电断电监控看门狗...');
@@ -6206,6 +6427,13 @@ async function fetchResourceMonitor() {
         // 1. CPU & Logical Cores
         const cpuInfo = d.cpu || {};
         const cpuCores = cpuInfo.cores || [];
+        const setTitle = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val || '未提供'; };
+        setTitle('rm-cpu-model-title', cpuInfo.model);
+        setTitle('rm-logical-title', `逻辑处理器 (${cpuInfo.coresCount ?? '未知'} 核心 / ${cpuInfo.logicalCount ?? '未知'} 线程)`);
+        setTitle('rm-gpu-model-title', d.gpu?.model);
+        setTitle('rm-gpu-status', d.gpu?.status);
+        setTitle('rm-storage-header-sub', d.storage?.systemDiskModel);
+
         const totalCpu = cpuCores.find(c => c.name === 'cpu')?.usePct || 0;
         rmPushHistory(rmHistory.cpu, totalCpu);
 
@@ -6216,7 +6444,7 @@ async function fetchResourceMonitor() {
         });
 
         const cpuSub = document.getElementById('rm-cpu-subtitle');
-        if (cpuSub) cpuSub.textContent = `${totalCpu}% (${cpuInfo.avgFreq || '1.80 GHz'})`;
+        if (cpuSub) cpuSub.textContent = `${totalCpu}% (${cpuInfo.avgFreq || '未提供'})`;
         rmDrawSparkline('rm-spark-cpu', rmHistory.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.25)');
 
         // 2. Memory
@@ -6230,8 +6458,8 @@ async function fetchResourceMonitor() {
 
         // 3. GPU (Intel Alder Lake-N Graphics)
         const gpu = d.gpu || {};
-        const gpuPct = gpu.usagePct || (gpu.actFreqFmt === '0 MHz' ? 1 : 12);
-        rmPushHistory(rmHistory.gpu, gpuPct);
+        const gpuPct = gpu.usagePct ?? null;
+        if (gpuPct !== null) rmPushHistory(rmHistory.gpu, gpuPct); else rmHistory.gpu = [];
 
         const gpuSub = document.getElementById('rm-gpu-subtitle');
         if (gpuSub) gpuSub.textContent = `${gpu.curFreqFmt} · ${gpu.tempFmt}`;
@@ -6239,8 +6467,8 @@ async function fetchResourceMonitor() {
 
         // 4. Storage
         const storage = d.storage || {};
-        const rootPart = storage.rootPart || { usePct: 8, used: '32G', size: '437G' };
-        rmPushHistory(rmHistory.storage, rootPart.usePct || 8);
+        const rootPart = storage.rootPart || { usePct: null, used: '-', size: '-' };
+        rmPushHistory(rmHistory.storage, rootPart.usePct ?? 0);
 
         const storageSub = document.getElementById('rm-storage-subtitle');
         if (storageSub) storageSub.textContent = `已用 ${rootPart.used} / ${rootPart.size} (${rootPart.usePct}%)`;
@@ -6327,8 +6555,8 @@ async function fetchResourceMonitor() {
 
             // Metrics row
             const uVal = document.getElementById('rm-cpu-util-val'); if (uVal) uVal.textContent = `${totalCpu}%`;
-            const fVal = document.getElementById('rm-cpu-freq-val'); if (fVal) fVal.textContent = cpuInfo.avgFreq || '1.38 GHz';
-            const tVal = document.getElementById('rm-cpu-threads-val'); if (tVal) tVal.textContent = `${cpuInfo.procsCount || 271} / ${cpuInfo.threadsCount || 735}`;
+            const fVal = document.getElementById('rm-cpu-freq-val'); if (fVal) fVal.textContent = cpuInfo.avgFreq || '未提供';
+            const tVal = document.getElementById('rm-cpu-threads-val'); if (tVal) tVal.textContent = `${cpuInfo.procsCount ?? '-'} / ${cpuInfo.threadsCount ?? '-'}`;
             const upVal = document.getElementById('rm-cpu-uptime-val'); if (upVal) upVal.textContent = cpuInfo.uptimeFormatted || '-';
 
             // Logical Processors (4 Cores with mini canvas curves)
@@ -6345,7 +6573,7 @@ async function fetchResourceMonitor() {
                                 <span class="rm-lc-pct" style="color:${color}">${c.usePct}%</span>
                             </div>
                             <canvas class="rm-lc-canvas" id="rm-lc-canvas-${c.name}" height="48"></canvas>
-                            <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px;text-align:right;">${freqObj.ghz || '1.38 GHz'}</div>
+                            <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px;text-align:right;">${freqObj.ghz || '未提供'}</div>
                         </div>
                     `;
                 }).join('');
@@ -6360,7 +6588,7 @@ async function fetchResourceMonitor() {
 
             // Sensors (Temperatures)
             const pkgTempEl = document.getElementById('rm-sensor-pkg-temp');
-            if (pkgTempEl && d.sensors) pkgTempEl.textContent = d.sensors.pkgTempFmt || '50 °C';
+            if (pkgTempEl && d.sensors) pkgTempEl.textContent = d.sensors.pkgTempFmt || '未提供';
 
             const coresList = document.getElementById('rm-sensor-cores-list');
             if (coresList && d.sensors?.coreTemps) {
@@ -6376,8 +6604,8 @@ async function fetchResourceMonitor() {
             const setP = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '-'; };
             setP('rm-cp-vendor', cpuInfo.vendor);
             setP('rm-cp-model', cpuInfo.model);
-            setP('rm-cp-cores-threads', `${cpuInfo.coresCount || 4} 核心 / ${cpuInfo.threadsCount ? 4 : 4} 逻辑处理器`);
-            setP('rm-cp-freqs', `${cpuInfo.baseFreq || '0.70 GHz'} / ${cpuInfo.maxFreq || '3.60 GHz'}`);
+            setP('rm-cp-cores-threads', `${cpuInfo.coresCount ?? '未提供'} 核心 / ${cpuInfo.logicalCount ?? '未提供'} 逻辑处理器`);
+            setP('rm-cp-freqs', `${cpuInfo.baseFreq || '未提供'} / ${cpuInfo.maxFreq || '未提供'}`);
             setP('rm-cp-l1', cpuInfo.l1Cache);
             setP('rm-cp-l2', cpuInfo.l2Cache);
             setP('rm-cp-l3', cpuInfo.l3Cache);
@@ -6388,16 +6616,16 @@ async function fetchResourceMonitor() {
         // [VIEW: GPU]
         else if (rmCurrentView === 'gpu') {
             const gpuBig = document.getElementById('rm-gpu-detail-pct');
-            if (gpuBig) gpuBig.textContent = `${gpuPct}%`;
+            if (gpuBig) gpuBig.textContent = gpuPct === null ? '未提供' : `${gpuPct}%`;
             rmDrawMainChart('rm-gpu-history-chart', rmHistory.gpu, '#f43f5e', 'rgba(244, 63, 94, 0.45)', 100);
 
-            const vramEl = document.getElementById('rm-gpu-vram-val'); if (vramEl) vramEl.textContent = gpu.vramFmt || '共享 (UMA)';
-            const freqEl = document.getElementById('rm-gpu-freq-val'); if (freqEl) freqEl.textContent = gpu.curFreqFmt || '300 MHz';
-            const memFreqEl = document.getElementById('rm-gpu-memfreq-val'); if (memFreqEl) memFreqEl.textContent = gpu.memFreqFmt || '内存同步';
-            const powerEl = document.getElementById('rm-gpu-power-val'); if (powerEl) powerEl.textContent = gpu.powerFmt || '动态 (TDP 6W)';
+            const vramEl = document.getElementById('rm-gpu-vram-val'); if (vramEl) vramEl.textContent = gpu.vramFmt || '未提供';
+            const freqEl = document.getElementById('rm-gpu-freq-val'); if (freqEl) freqEl.textContent = gpu.curFreqFmt || '未提供';
+            const memFreqEl = document.getElementById('rm-gpu-memfreq-val'); if (memFreqEl) memFreqEl.textContent = gpu.memFreqFmt || '未提供';
+            const powerEl = document.getElementById('rm-gpu-power-val'); if (powerEl) powerEl.textContent = gpu.powerFmt || '未提供';
 
             const gpuTempEl = document.getElementById('rm-gpu-sensor-temp');
-            if (gpuTempEl) gpuTempEl.textContent = gpu.tempFmt || '50 °C';
+            if (gpuTempEl) gpuTempEl.textContent = gpu.tempFmt || '未提供';
 
             const setP = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '-'; };
             setP('rm-gp-vendor', gpu.vendor);
@@ -6445,17 +6673,17 @@ async function fetchResourceMonitor() {
         // [VIEW: STORAGE]
         else if (rmCurrentView === 'storage') {
             const storage = d.storage || {};
-            const rootPart = storage.rootPart || { usePct: 8, used: '32G', size: '437G', avail: '387G' };
+            const rootPart = storage.rootPart || { usePct: null, used: '-', size: '-', avail: '-' };
             const stBig = document.getElementById('rm-storage-detail-pct');
             if (stBig) stBig.textContent = `${rootPart.usePct}%`;
 
             rmDrawMainChart('rm-storage-history-chart', rmHistory.storage, '#0ea5e9', 'rgba(14, 165, 233, 0.45)', 100);
 
             const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-            setVal('rm-st-sysdisk-val', storage.systemDiskModel || 'KIOXIA 512GB');
-            setVal('rm-st-systype-val', storage.systemDiskType || 'SATA SSD (固态硬盘)');
+            setVal('rm-st-sysdisk-val', storage.systemDiskModel || '未提供');
+            setVal('rm-st-systype-val', storage.systemDiskType || '未提供');
             setVal('rm-st-rootuse-val', `${rootPart.used} / ${rootPart.size}`);
-            setVal('rm-st-disks-count', `${storage.disks?.length || 7} 块物理磁盘`);
+            setVal('rm-st-disks-count', `${storage.disks?.length ?? 0} 块物理磁盘`);
 
             // Mount points / Partitions Table
             const stTable = document.getElementById('rm-storage-table');

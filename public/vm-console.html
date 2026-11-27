@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>虚拟机 Web 控制台</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #fff; }
+    #bar {
+      height: 44px; background: #1a2832; border-bottom: 1px solid #2d4252;
+      display: flex; justify-content: space-between; align-items: center; padding: 0 16px;
+      user-select: none; z-index: 10; font-size: 13px;
+    }
+    #screen { width: 100%; height: calc(100% - 44px); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .btn {
+      background: #253846; border: 1px solid #3d5466; color: #e2e8f0; border-radius: 4px;
+      padding: 5px 12px; font-size: 12px; cursor: pointer; transition: background 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: #324a5c; color: #fff; }
+    .btn-primary { background: #0095d9; border-color: #0095d9; color: #fff; }
+    .btn-primary:hover { background: #0081bc; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <strong id="vm-title" style="font-size:14px;color:#38bdf8;"><i class="fa-solid fa-desktop" style="margin-right:6px;"></i>正在加载控制台…</strong>
+      <span id="status" style="color:#8faec4;font-size:12px;"><i class="fa-solid fa-spinner fa-spin"></i> 正在连接…</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="sendCAD()"><i class="fa-solid fa-keyboard"></i> Ctrl+Alt+Del</button>
+      <button class="btn" onclick="reconnect()"><i class="fa-solid fa-rotate-right"></i> 重新连接</button>
+      <button class="btn" onclick="toggleFullScreen()"><i class="fa-solid fa-expand"></i> 全屏</button>
+    </div>
+  </div>
+  <div id="screen"></div>
+
+  <script type="module">
+    import RFB from '/vm-console-assets/core/rfb.js';
+
+    let rfb = null;
+    const params = new URLSearchParams(location.search);
+    const vmId = params.get('id') || '';
+    const vmName = params.get('name') || vmId || '虚拟机';
+
+    document.getElementById('vm-title').innerHTML = `<i class="fa-solid fa-desktop" style="margin-right:6px;"></i>【${escapeHtml(vmName)}】控制台`;
+    document.title = `【${vmName}】Web 控制台 - 边缘服务器`;
+
+    function escapeHtml(s) {
+      return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    }
+
+    async function connect() {
+      const statusEl = document.getElementById('status');
+      const screenEl = document.getElementById('screen');
+      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#0095d9;margin-right:6px;"></i>正在建立远程连接…';
+      screenEl.innerHTML = '<div style="color:#8faec4;font-size:14px;text-align:center;"><i class="fa-solid fa-spinner fa-spin" style="font-size:32px;margin-bottom:12px;display:block;color:#0095d9;"></i>正在建立远程桌面连接...</div>';
+
+      if (rfb) {
+        try { rfb.disconnect(); } catch (_) {}
+        rfb = null;
+      }
+
+      try {
+        const res = await fetch('/api/vms/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: vmId, action: 'console' })
+        });
+        const j = await res.json();
+        if (!j.success) throw new Error(j.error);
+
+        screenEl.innerHTML = '';
+        const token = j.data.token;
+        const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl = `${protocol}://${location.host}/vm-console-socket?ticket=${encodeURIComponent(token)}`;
+
+        rfb = new RFB(screenEl, wsUrl);
+        rfb.scaleViewport = true;
+        rfb.resizeSession = false;
+
+        rfb.addEventListener('connect', () => {
+          statusEl.innerHTML = '<span style="color:#22c55e;"><i class="fa-solid fa-circle-check"></i> 已连接 (运行中)</span>';
+          try { rfb.focus(); } catch (_) {}
+        });
+
+        rfb.addEventListener('disconnect', (e) => {
+          const clean = e?.detail?.clean;
+          statusEl.innerHTML = `<span style="color:#ef4444;"><i class="fa-solid fa-circle-exclamation"></i> 连接已断开 ${clean ? '' : '(连接被关闭)'}</span>`;
+        });
+
+        rfb.addEventListener('securityfailure', () => {
+          statusEl.innerHTML = '<span style="color:#ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> 安全认证失败</span>';
+        });
+      } catch (e) {
+        statusEl.innerHTML = `<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark"></i> 连接失败: ${escapeHtml(e.message)}</span>`;
+        screenEl.innerHTML = `
+          <div style="color:#ef4444;text-align:center;padding:24px;">
+            <i class="fa-solid fa-triangle-exclamation" style="font-size:36px;margin-bottom:12px;display:block;"></i>
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px;">无法连接控制台</div>
+            <div style="font-size:13px;color:#8faec4;margin-bottom:16px;">${escapeHtml(e.message)}</div>
+            <button class="btn btn-primary" onclick="window.connect()"><i class="fa-solid fa-rotate-right"></i> 重试</button>
+          </div>
+        `;
+      }
+    }
+
+    window.connect = connect;
+    window.reconnect = connect;
+    window.sendCAD = () => rfb?.sendCtrlAltDel();
+    window.toggleFullScreen = () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
+
+    if (vmId) connect();
+    else document.getElementById('status').textContent = '未指定虚拟机 ID';
+  </script>
+</body>
+</html>
